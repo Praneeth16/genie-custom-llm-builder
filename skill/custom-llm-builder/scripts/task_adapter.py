@@ -14,8 +14,10 @@ PHEE_SCHEMA = {
         "required": ["event_type", "trigger", "subject", "treatment", "effect"],
         "properties": {
             "event_type": {"enum": ["Adverse_event", "Potential_therapeutic_event"]},
-            "trigger": {"type": "string"}, "subject": {"type": ["string", "null"]},
-            "treatment": {"type": "string"}, "effect": {"type": "string"},
+            "trigger": {"type": "string"},
+            "subject": {"type": "array", "items": {"type": "string"}, "uniqueItems": True},
+            "treatment": {"type": "array", "items": {"type": "string"}, "uniqueItems": True},
+            "effect": {"type": "array", "items": {"type": "string"}, "uniqueItems": True},
         },
     }}},
 }
@@ -72,7 +74,7 @@ def get_adapter(task_card: dict[str, Any]) -> TaskAdapter:
         schema = json.dumps(PHEE_SCHEMA, separators=(",", ":"))
         return TaskAdapter(
             "phee",
-            f"Extract pharmacovigilance events. Return only JSON matching this schema: {schema}. Copy every extracted string verbatim from the input.",
+            f"Extract pharmacovigilance events. Return only JSON matching this schema: {schema}. Copy every extracted string verbatim from the input. Use lists for subject, treatment, and effect, for example: {{\"subject\":[],\"treatment\":[\"aspirin\"],\"effect\":[\"nausea\"]}}.",
             PHEE_SCHEMA, "strict_event_f1", _phee_metric,
         )
     custom = task_card.get("task", task_card)

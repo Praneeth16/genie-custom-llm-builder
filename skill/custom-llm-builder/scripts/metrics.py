@@ -9,6 +9,7 @@ from typing import Any
 EVENT_KEYS = {"event_type", "trigger", "subject", "treatment", "effect"}
 EVENT_TYPES = {"Adverse_event", "Potential_therapeutic_event"}
 SCORED_FIELDS = ("trigger", "treatment", "effect")
+LIST_FIELDS = ("subject", "treatment", "effect")
 
 
 def parse_document(value: Any) -> Any:
@@ -28,11 +29,15 @@ def is_valid_document(document: Any, input_text: str) -> bool:
     for event in document["events"]:
         if not isinstance(event, dict) or set(event) != EVENT_KEYS:
             return False
-        if event["event_type"] not in EVENT_TYPES or event["subject"] is not None and not isinstance(event["subject"], str):
+        if event["event_type"] not in EVENT_TYPES or not isinstance(event["trigger"], str):
             return False
-        if any(not isinstance(event[field], str) for field in SCORED_FIELDS):
+        if any(not isinstance(event[field], list) for field in LIST_FIELDS):
             return False
-        spans = [event[field] for field in SCORED_FIELDS] + ([] if event["subject"] is None else [event["subject"]])
+        if any(any(not isinstance(span, str) for span in event[field]) for field in LIST_FIELDS):
+            return False
+        if any(len(event[field]) != len(set(event[field])) for field in LIST_FIELDS):
+            return False
+        spans = [event["trigger"]] + [span for field in LIST_FIELDS for span in event[field]]
         if any(span not in input_text for span in spans):
             return False
     return True
@@ -64,10 +69,28 @@ def token_f1(left: str, right: str) -> float:
     return 2 * precision * recall / (precision + recall) if precision + recall else 0.0
 
 
+def role_items(event: dict[str, Any], field: str) -> list[str]:
+    return [event[field]] if field == "trigger" else event[field]
+
+
+def role_token_f1(left: list[str], right: list[str]) -> float:
+    return token_f1(" ".join(left), " ".join(right))
+
+
+def role_exact(left: list[str], right: list[str]) -> float:
+    return float(set(left) == set(right))
+
+
+def role_score(predicted: dict[str, Any], gold: dict[str, Any], field: str) -> float:
+    predicted_items = role_items(predicted, field)
+    gold_items = role_items(gold, field)
+    return 0.9 * role_token_f1(predicted_items, gold_items) + 0.1 * role_exact(predicted_items, gold_items)
+
+
 def event_score(predicted: dict[str, Any], gold: dict[str, Any]) -> float:
     if predicted["event_type"] != gold["event_type"]:
         return 0.0
-    return sum(0.9 * token_f1(predicted[field], gold[field]) + 0.1 * (predicted[field] == gold[field]) for field in SCORED_FIELDS) / len(SCORED_FIELDS)
+    return sum(role_score(predicted, gold, field) for field in SCORED_FIELDS) / len(SCORED_FIELDS)
 
 
 def maximum_matching(scores: list[list[float]]) -> tuple[float, list[tuple[int, int]]]:
@@ -96,7 +119,17 @@ def maximum_matching(scores: list[list[float]]) -> tuple[float, list[tuple[int, 
 def extraction_metrics(prediction: Any, gold: Any, input_text: str) -> dict[str, float]:
     gold_document = validate_gold(gold, input_text)
     predicted_document = parse_document(prediction)
-    zero = {"strict_event_f1": 0.0, "valid_format": 0.0, "empty_output": 0.0, "event_precision": 0.0, "event_recall": 0.0, "main_argument_exact_match": 0.0, "main_argument_token_f1": 0.0}
+    zero = {
+        "strict_event_f1": 0.0,
+        "valid_format": 0.0,
+        "empty_output": 0.0,
+        "event_precision": 0.0,
+        "event_recall": 0.0,
+        "main_argument_exact_match": 0.0,
+        "main_argument_token_f1": 0.0,
+        "subject_exact_match": 0.0,
+        "subject_token_f1": 0.0,
+    }
     if not is_valid_document(predicted_document, input_text):
         return zero
     predicted, targets = predicted_document["events"], gold_document["events"]
@@ -107,7 +140,30 @@ def extraction_metrics(prediction: Any, gold: Any, input_text: str) -> dict[str,
     precision = matched / len(predicted) if predicted else 0.0
     recall = matched / len(targets) if targets else 0.0
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    denominator = max(len(predicted), len(targets)) * len(SCORED_FIELDS)
-    exact = sum(predicted[i][field] == targets[j][field] for i, j in pairs for field in SCORED_FIELDS) / denominator if denominator else 0.0
-    argument_f1 = sum(token_f1(predicted[i][field], targets[j][field]) for i, j in pairs for field in SCORED_FIELDS) / denominator if denominator else 0.0
-    return {"strict_event_f1": f1, "valid_format": 1.0, "empty_output": float(not predicted), "event_precision": precision, "event_recall": recall, "main_argument_exact_match": exact, "main_argument_token_f1": argument_f1}
+    event_denominator = max(len(predicted), len(targets))
+    main_denominator = event_denominator * len(SCORED_FIELDS)
+    exact = sum(
+        role_exact(role_items(predicted[i], field), role_items(targets[j], field))
+        for i, j in pairs for field in SCORED_FIELDS
+    ) / main_denominator if main_denominator else 0.0
+    argument_f1 = sum(
+        role_token_f1(role_items(predicted[i], field), role_items(targets[j], field))
+        for i, j in pairs for field in SCORED_FIELDS
+    ) / main_denominator if main_denominator else 0.0
+    subject_exact = sum(
+        role_exact(predicted[i]["subject"], targets[j]["subject"]) for i, j in pairs
+    ) / event_denominator if event_denominator else 0.0
+    subject_f1 = sum(
+        role_token_f1(predicted[i]["subject"], targets[j]["subject"]) for i, j in pairs
+    ) / event_denominator if event_denominator else 0.0
+    return {
+        "strict_event_f1": f1,
+        "valid_format": 1.0,
+        "empty_output": float(not predicted),
+        "event_precision": precision,
+        "event_recall": recall,
+        "main_argument_exact_match": exact,
+        "main_argument_token_f1": argument_f1,
+        "subject_exact_match": subject_exact,
+        "subject_token_f1": subject_f1,
+    }

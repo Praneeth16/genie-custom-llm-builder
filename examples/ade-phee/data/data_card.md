@@ -1,60 +1,61 @@
 # PHEE V2 data card
 
-## Source
+## Source and counts
 
-- Dataset: PHEE V2.
 - Repository: https://github.com/ZhaoyueSun/phee-with-chatgpt
 - License: MIT.
-- Source commit: `a90c680b08464e731635eb2d2f2c49be6ad5e3e5`.
-- Real source layout: `data/datasets/phee2/source/{train,dev,test}.json`. The files use JSON Lines despite the `.json` suffix.
+- Commit: `a90c680b08464e731635eb2d2f2c49be6ad5e3e5`.
+- Source layout: `data/datasets/phee2/source/{train,dev,test}.json`, using JSON Lines despite the suffix.
 
-## Counts
+| Split | Sentences | Source events | Retained events | Dropped events | Empty gold sentences |
+|---|---:|---:|---:|---:|---:|
+| Train | 2,898 | 3,004 | 3,004 | 0 | 0 |
+| Dev | 961 | 1,003 | 1,003 | 0 | 0 |
+| Test | 968 | 1,010 | 1,009 | 1 | 1 |
+| Total | 4,827 | 5,017 | 5,016 | 1 | 1 |
 
-| Split | Source sentences | Converted sentences | Source events | Retained events | Dropped events | Sentences with no retained event |
-|---|---:|---:|---:|---:|---:|---:|
-| Train | 2,898 | 2,898 | 3,004 | 2,473 | 531 | 472 |
-| Dev | 961 | 961 | 1,003 | 808 | 195 | 173 |
-| Test | 968 | 968 | 1,010 | 815 | 195 | 165 |
-| Total | 4,827 | 4,827 | 5,017 | 4,096 | 921 | 810 |
-
-The sentence counts exactly match the published split sizes. Sentences are never dropped. A sentence may have an empty `events` list after incompatible source events are removed.
+The sentence counts match the published splits. The only empty gold sentence contains the one source event whose effect annotation is not verbatim in the sentence.
 
 ## Mapping
 
-- `event_type`: preserve `Adverse_event` or `Potential_therapeutic_event`.
-- `trigger`: one contiguous verbatim value from `Trigger.text`.
-- `subject`: one contiguous verbatim value from `Subject.text`; `null` when absent. An incompatible subject is mapped to `null` and counted.
-- `treatment`: one contiguous verbatim value from `Treatment.text`.
-- `effect`: one contiguous verbatim value from `Effect.text`.
-- Events with a missing, multiple, discontinuous, or non-verbatim required field are removed. Values are not inferred, merged, or silently shortened.
+- `event_type` preserves `Adverse_event` or `Potential_therapeutic_event`.
+- `trigger` is one verbatim string.
+- `subject`, `treatment`, and `effect` are lists of verbatim strings.
+- Multiple entities and discontinuous pieces become separate list items in source order.
+- An absent role becomes an empty list.
+- Duplicate source spans are represented once, at their first source position.
+- An event is dropped only for a truly non-verbatim span, invalid source shape, unrepresentable trigger, or invalid event type.
 
-## Incompatible gold
+## Representation audit
 
-Reason counts can overlap because one dropped event can have more than one problem.
+These cases were previously incompatible with the scalar schema. They are now represented as lists and do not cause event removal.
 
-| Reason | Train | Dev | Test | Total |
+| Represented case | Train | Dev | Test | Total |
 |---|---:|---:|---:|---:|
-| Missing effect | 223 | 94 | 107 | 424 |
-| Missing treatment | 1 | 0 | 0 | 1 |
-| Multiple treatment entities | 10 | 2 | 2 | 14 |
-| Multiple effect entities | 25 | 11 | 8 | 44 |
-| Discontinuous treatment | 170 | 61 | 54 | 285 |
-| Discontinuous effect | 140 | 36 | 38 | 214 |
+| Missing subject → empty list | 1,560 | 487 | 546 | 2,593 |
+| Missing treatment → empty list | 1 | 0 | 0 | 1 |
+| Missing effect → empty list | 223 | 94 | 107 | 424 |
+| Multiple subject entities → list | 3 | 1 | 2 | 6 |
+| Multiple treatment entities → list | 10 | 2 | 2 | 14 |
+| Multiple effect entities → list | 25 | 11 | 8 | 44 |
+| Discontinuous subject pieces → list | 45 | 9 | 16 | 70 |
+| Discontinuous treatment pieces → list | 170 | 61 | 54 | 285 |
+| Discontinuous effect pieces → list | 141 | 36 | 38 | 215 |
+| Duplicate treatment span → represented once | 4 | 0 | 0 | 4 |
+
+## Dropped gold
+
+Reason counts can overlap if a future event has more than one problem.
+
+| Dropped reason | Train | Dev | Test | Total |
+|---|---:|---:|---:|---:|
 | Non-verbatim effect | 0 | 0 | 1 | 1 |
-| Dropped events | 531 | 195 | 195 | 921 |
-
-Subject-only incompatibilities do not require dropping an event because the output schema permits `null`.
-
-| Subject handling | Train | Dev | Test | Total |
-|---|---:|---:|---:|---:|
-| Discontinuous subject | 45 | 9 | 16 | 70 |
-| Multiple subject entities | 3 | 1 | 2 | 6 |
-| Subjects mapped to `null` | 39 | 8 | 14 | 61 |
+| Dropped events | 0 | 0 | 1 | 1 |
 
 ## Split overlap
 
-- Normalized exact sentence overlap: train/dev 0, train/test 0, dev/test 0.
-- Near-duplicate definition: cross-split token-set Jaccard similarity at least 0.90, excluding normalized exact matches.
+- Normalized exact overlap: train/dev 0, train/test 0, dev/test 0.
+- Near duplicates use cross-split token-set Jaccard similarity at least 0.90, excluding exact matches.
 - Near-duplicate pairs: train/dev 0, train/test 0, dev/test 0.
 
 ## Hand check
@@ -63,16 +64,16 @@ Five converted dev rows were compared with their source records on 2026-11-04.
 
 | Source ID | Result |
 |---|---|
-| `10907391_3` | Pass. Trigger, treatment, and effect match the source; absent subject remains `null`. |
-| `18957000_3` | Pass. Hyphenated source sentence is preserved and all mapped spans are verbatim. |
-| `6405633_1` | Pass. The source event has no `Effect`, so it is reported as incompatible and the sentence is retained with an empty event list. |
-| `4044222_1` | Pass. Subject, trigger, treatment, and effect match the source exactly. |
-| `12962465_2` | Pass. Multiword trigger and treatment match the source exactly. |
+| `6405633_1` | Pass. The missing source effect is represented as an empty list; the event is retained. |
+| `18159131_4` | Pass. The discontinuous subject is represented as two verbatim list items in source order. |
+| `10907391_3` | Pass. Trigger, treatment, and effect match; absent subject is an empty list. |
+| `4044222_1` | Pass. Subject, trigger, treatment, and effect match exactly. |
+| `12962465_2` | Pass. Multiword trigger, treatment, and effect match exactly. |
 
-Result: 5 of 5 conversions agree with the stated mapping.
+Result: 5 of 5 conversions agree with the revised mapping.
 
 ## Files
 
 - `train.jsonl`, `dev.jsonl`, and `test.jsonl`: full converted splits.
-- `sample-20.jsonl`: first 20 converted dev rows for review.
-- `data_card.json`: machine-readable counts and overlap report.
+- `sample-20.jsonl`: first 20 regenerated dev rows.
+- `data_card.json`: machine-readable counts and audit details.

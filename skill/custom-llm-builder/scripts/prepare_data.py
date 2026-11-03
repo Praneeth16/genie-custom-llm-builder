@@ -57,30 +57,41 @@ def source_events(record: dict[str, Any]) -> list[dict[str, Any]]:
     return [raw_events] if isinstance(raw_events, dict) else raw_events
 
 
-def source_span(field: Any, role: str, text: str, required: bool, reasons: Counter[str]) -> str | None:
+def source_spans(field: Any, role: str, text: str, reasons: Counter[str]) -> list[str] | None:
     if field is None:
-        if required:
-            reasons[f"missing_{role}"] += 1
-        return None
+        reasons[f"represented_missing_{role}_as_empty_list"] += 1
+        return []
     if isinstance(field, str):
-        value = field
+        values = [field]
     elif isinstance(field, dict):
         entities = field.get("text") or []
-        if len(entities) != 1:
-            reasons[f"multiple_{role}"] += 1
-            return None
-        pieces = entities[0]
-        if len(pieces) != 1:
-            reasons[f"discontinuous_{role}"] += 1
-            return None
-        value = pieces[0]
+        if len(entities) > 1:
+            reasons[f"represented_multiple_{role}_entities_as_list"] += 1
+        if any(len(pieces) > 1 for pieces in entities):
+            reasons[f"represented_discontinuous_{role}_pieces_as_list"] += 1
+        values = [piece for pieces in entities for piece in pieces]
     else:
-        reasons[f"invalid_{role}_shape"] += 1
+        reasons[f"dropped_invalid_{role}_shape"] += 1
         return None
-    if value not in text:
-        reasons[f"nonverbatim_{role}"] += 1
+    if not values:
+        reasons[f"represented_missing_{role}_as_empty_list"] += 1
+    if any(value not in text for value in values):
+        reasons[f"dropped_nonverbatim_{role}"] += 1
         return None
-    return value
+    unique_values = list(dict.fromkeys(values))
+    if len(unique_values) != len(values):
+        reasons[f"represented_duplicate_{role}_span_once"] += 1
+    return unique_values
+
+
+def source_trigger(field: Any, text: str, reasons: Counter[str]) -> str | None:
+    values = source_spans(field, "trigger", text, reasons)
+    if values is None:
+        return None
+    if len(values) != 1:
+        reasons["dropped_unrepresentable_trigger"] += 1
+        return None
+    return values[0]
 
 
 def convert_with_diagnostics(record: dict[str, Any]) -> tuple[dict[str, Any], Counter[str]]:
@@ -91,33 +102,25 @@ def convert_with_diagnostics(record: dict[str, Any]) -> tuple[dict[str, Any], Co
         event_reasons: Counter[str] = Counter()
         nested = "Trigger" in event or "Treatment" in event or "Effect" in event
         if nested:
-            trigger = source_span(event.get("Trigger"), "trigger", text, True, event_reasons)
-            subject = source_span(event.get("Subject"), "subject", text, False, event_reasons)
-            treatment = source_span(event.get("Treatment"), "treatment", text, True, event_reasons)
-            effect = source_span(event.get("Effect"), "effect", text, True, event_reasons)
+            trigger = source_trigger(event.get("Trigger"), text, event_reasons)
+            subject = source_spans(event.get("Subject"), "subject", text, event_reasons)
+            treatment = source_spans(event.get("Treatment"), "treatment", text, event_reasons)
+            effect = source_spans(event.get("Effect"), "effect", text, event_reasons)
             event_type = event.get("event_type")
         else:
-            trigger = source_span(first(event, ("trigger",), None), "trigger", text, True, event_reasons)
-            subject = source_span(first(event, ("subject",), None), "subject", text, False, event_reasons)
-            treatment = source_span(first(event, ("treatment", "drug"), None), "treatment", text, True, event_reasons)
-            effect = source_span(first(event, ("effect", "adverse_effect"), None), "effect", text, True, event_reasons)
+            trigger = source_trigger(first(event, ("trigger",), None), text, event_reasons)
+            subject = source_spans(first(event, ("subject",), None), "subject", text, event_reasons)
+            treatment = source_spans(first(event, ("treatment", "drug"), None), "treatment", text, event_reasons)
+            effect = source_spans(first(event, ("effect", "adverse_effect"), None), "effect", text, event_reasons)
             event_type = first(event, ("event_type", "type"))
         event_type = {"adverse event": "Adverse_event", "potential therapeutic event": "Potential_therapeutic_event"}.get(event_type, event_type)
         if event_type not in {"Adverse_event", "Potential_therapeutic_event"}:
-            event_reasons["invalid_event_type"] += 1
-        required_invalid = any(
-            key != "multiple_subject" and not key.endswith("_subject")
-            for key in event_reasons
-        )
-        subject_invalid = any(key.endswith("_subject") for key in event_reasons)
-        if required_invalid:
+            event_reasons["dropped_invalid_event_type"] += 1
+        if any(key.startswith("dropped_") for key in event_reasons):
             reasons.update(event_reasons)
             reasons["dropped_events"] += 1
             continue
-        if subject_invalid:
-            subject = None
-            reasons.update(event_reasons)
-            reasons["subjects_mapped_to_null"] += 1
+        reasons.update(event_reasons)
         events.append({
             "event_type": event_type,
             "trigger": trigger,

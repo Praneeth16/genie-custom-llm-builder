@@ -16,10 +16,11 @@ data:
   mapping:
     event_type: Preserve Adverse_event or Potential_therapeutic_event.
     trigger: Use Trigger.text when it contains exactly one contiguous verbatim span.
-    subject: Use Subject.text when it contains exactly one contiguous verbatim span; use null when absent or not representable.
-    treatment: Use Treatment.text when it contains exactly one contiguous verbatim span.
-    effect: Use Effect.text when it contains exactly one contiguous verbatim span.
-    incompatible_gold: Drop only the incompatible event, keep the sentence, and report every reason in the data card. Never infer a missing role or merge discontinuous or multiple spans.
+    subject: Flatten Subject.text entities and discontinuous pieces into a verbatim string list in source order; use an empty list when absent.
+    treatment: Flatten Treatment.text entities and discontinuous pieces into a verbatim string list in source order; use an empty list when absent.
+    effect: Flatten Effect.text entities and discontinuous pieces into a verbatim string list in source order; use an empty list when absent.
+    duplicate_source_spans: Keep the first occurrence in source order so schema lists contain unique items; report this normalization.
+    incompatible_gold: Drop an event only when an annotated span is not verbatim in the sentence or the event type is invalid. Keep the sentence and report every reason.
 
 output_schema:
   type: object
@@ -39,23 +40,34 @@ output_schema:
             type: string
             constraint: Must be copied verbatim from the input.
           subject:
-            type: [string, "null"]
-            constraint: A string must be copied verbatim from the input.
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+            constraint: Every item must be copied verbatim from the input.
           treatment:
-            type: string
-            constraint: Must be copied verbatim from the input.
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+            constraint: Every item must be copied verbatim from the input.
           effect:
-            type: string
-            constraint: Must be copied verbatim from the input.
+            type: array
+            items:
+              type: string
+            uniqueItems: true
+            constraint: Every item must be copied verbatim from the input.
 
 metrics:
   primary:
     name: gated_strict_event_f1
-    definition: Invalid JSON, schema violations, invalid event types, or non-verbatim spans score zero. Valid outputs use one-to-one event matching and strict event F1 over event type, trigger, treatment, and effect.
+    definition: Invalid JSON, schema violations, duplicate list items, invalid event types, or non-verbatim spans score zero. Valid outputs use one-to-one event matching with precision and recall. Per-event similarity is the mean trigger, treatment, and effect score; each role score is 0.9 times bag-of-tokens F1 over joined list items plus 0.1 when predicted and gold span sets match exactly. Both empty roles score 1 and one empty role scores 0.
   secondary:
     - valid_format_rate
     - phee_main_argument_exact_match
     - phee_main_argument_token_f1
+    - subject_exact_match
+    - subject_token_f1
 
 quality_target:
   split: dev

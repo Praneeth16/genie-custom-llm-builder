@@ -9,9 +9,9 @@ TEXT = "The patient developed severe nausea after aspirin treatment."
 EVENT = {
     "event_type": "Adverse_event",
     "trigger": "developed",
-    "subject": "The patient",
-    "treatment": "aspirin",
-    "effect": "severe nausea",
+    "subject": ["The patient"],
+    "treatment": ["aspirin"],
+    "effect": ["severe nausea"],
 }
 GOLD = {"events": [EVENT]}
 
@@ -21,7 +21,7 @@ def test_invalid_json_is_zero():
 
 
 def test_string_not_in_input_is_zero():
-    prediction = {"events": [{**EVENT, "effect": "headache"}]}
+    prediction = {"events": [{**EVENT, "effect": ["headache"]}]}
     assert extraction_reward(prediction, GOLD, TEXT) == 0.0
 
 
@@ -34,7 +34,7 @@ def test_empty_prediction_against_gold_is_zero():
 
 
 def test_copying_whole_sentence_into_every_span_scores_poorly():
-    copied = {"events": [{**EVENT, "trigger": TEXT, "subject": TEXT, "treatment": TEXT, "effect": TEXT}]}
+    copied = {"events": [{**EVENT, "trigger": TEXT, "subject": [TEXT], "treatment": [TEXT], "effect": [TEXT]}]}
     score = extraction_reward(copied, GOLD, TEXT)
     assert 0.0 < score < 0.35
 
@@ -45,7 +45,7 @@ def test_duplicate_events_reduce_precision():
 
 
 def test_partial_match_gets_partial_credit():
-    prediction = {"events": [{**EVENT, "effect": "nausea"}]}
+    prediction = {"events": [{**EVENT, "effect": ["nausea"]}]}
     score = extraction_reward(prediction, GOLD, TEXT)
     assert 0.0 < score < 1.0
 
@@ -67,4 +67,19 @@ def test_trl_conversational_completion_is_parsed():
 
 def test_invalid_gold_fails_loudly():
     with pytest.raises(ValueError, match="gold output"):
-        extraction_reward(GOLD, {"events": [{**EVENT, "effect": "fabricated"}]}, TEXT)
+        extraction_reward(GOLD, {"events": [{**EVENT, "effect": ["fabricated"]}]}, TEXT)
+
+
+def test_list_item_not_in_input_is_zero():
+    prediction = {"events": [{**EVENT, "treatment": ["aspirin", "ibuprofen"]}]}
+    assert extraction_reward(prediction, GOLD, TEXT) == 0.0
+
+
+def test_duplicate_list_items_are_invalid():
+    prediction = {"events": [{**EVENT, "effect": ["severe nausea", "severe nausea"]}]}
+    assert extraction_reward(prediction, GOLD, TEXT) == 0.0
+
+
+def test_missing_effect_empty_list_scores_as_a_role():
+    event = {**EVENT, "effect": []}
+    assert extraction_reward({"events": [event]}, {"events": [event]}, TEXT) == 1.0
