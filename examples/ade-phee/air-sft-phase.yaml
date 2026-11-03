@@ -1,0 +1,13 @@
+experiment_name: ade_phee_sft_phase
+mlflow_experiment_directory: /Workspace/Shared/custom_llm
+mlflow_run_name: ade_phee_sft_learning_curve
+compute: {accelerator_type: GPU_1xH100, num_accelerators: 1}
+environment:
+  version: databricks_ai_v6
+code_source: {root_path: "../.."}
+command: python "$CODE_SOURCE_PATH/examples/ade-phee/run_sft_phase.py"
+env_variables:
+  VLLM_USE_FLASHINFER_SAMPLER: "0"
+  UNSLOTH_VLLM_STANDBY: "1"
+timeout_minutes: 240
+max_retries: 0

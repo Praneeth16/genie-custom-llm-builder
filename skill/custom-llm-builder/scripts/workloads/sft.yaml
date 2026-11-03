@@ -8,6 +8,7 @@ environment:
 code_source: {root_path: ".."}
 command: python $CODE_SOURCE_PATH/train_sft.py --train-dataset "$TRAIN_DATA" --dev-dataset "$DEV_DATA" --output "$ADAPTER_OUTPUT"
 env_variables:
+  VLLM_USE_FLASHINFER_SAMPLER: "0"
   TRAIN_DATA: /Volumes/catalog/schema/volume/train.jsonl
   DEV_DATA: /Volumes/catalog/schema/volume/dev.jsonl
   ADAPTER_OUTPUT: /Volumes/catalog/schema/volume/sft_adapter

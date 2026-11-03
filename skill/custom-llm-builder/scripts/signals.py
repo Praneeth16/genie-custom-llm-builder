@@ -12,19 +12,23 @@ from task_adapter import get_adapter
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True)
+    parser.add_argument("--adapter")
     parser.add_argument("--dev-dataset", required=True)
     parser.add_argument("--subset-size", type=int, default=64)
     parser.add_argument("--samples", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output")
+    parser.add_argument("--tag", action="append", default=[])
     args = parser.parse_args()
     import mlflow
     from vllm import LLM, SamplingParams
+    from vllm.lora.request import LoRARequest
     rows = [json.loads(line) for line in Path(args.dev_dataset).read_text().splitlines() if line.strip()][:args.subset_size]
     adapter = get_adapter({"adapter": "phee"})
     prompts = [adapter.prompt_messages(row["input_text"]) for row in rows]
-    engine = LLM(model=args.model)
-    outputs = engine.chat(prompts, SamplingParams(n=args.samples, temperature=1.0, max_tokens=512, seed=args.seed))
+    engine = LLM(model=args.model, enable_lora=args.adapter is not None, max_lora_rank=64)
+    request = LoRARequest("task-adapter", 1, args.adapter) if args.adapter else None
+    outputs = engine.chat(prompts, SamplingParams(n=args.samples, temperature=1.0, max_tokens=512, seed=args.seed), lora_request=request)
     reward_groups, all_metrics = [], []
     for row, output in zip(rows, outputs):
         group = [extraction_metrics(item.text, row["gold"], row["input_text"]) for item in output.outputs]
@@ -36,9 +40,13 @@ def main() -> None:
         "mean_within_prompt_reward_std": statistics.mean(statistics.pstdev(group) for group in reward_groups),
         "fraction_zero_reward_std": statistics.mean(statistics.pstdev(group) == 0 for group in reward_groups),
         "empty_output_rate": statistics.mean(item["empty_output"] for item in all_metrics),
+        "reward_groups": reward_groups,
     }
+    tags = dict(tag.split("=", 1) for tag in args.tag)
     with mlflow.start_run():
-        mlflow.log_metrics(report)
+        with mlflow.start_run(nested=True, run_name=tags.get("step", "signals"), tags=tags) as run:
+            mlflow.log_metrics({key: value for key, value in report.items() if isinstance(value, (int, float))})
+            report["mlflow_run_id"] = run.info.run_id
     if args.output:
         Path(args.output).write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))

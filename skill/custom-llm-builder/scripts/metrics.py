@@ -10,14 +10,24 @@ EVENT_KEYS = {"event_type", "trigger", "subject", "treatment", "effect"}
 EVENT_TYPES = {"Adverse_event", "Potential_therapeutic_event"}
 SCORED_FIELDS = ("trigger", "treatment", "effect")
 LIST_FIELDS = ("subject", "treatment", "effect")
+# Qwen3-family chat templates can wrap assistant turns in a (often empty) reasoning block.
+REASONING_PREFIX = re.compile(r"^\s*<think>.*?</think>\s*", re.DOTALL)
+
+
+def response_text(value: Any) -> Any:
+    """Return the answer text from a plain string, a TRL message list, or provider content blocks."""
+    if isinstance(value, list) and len(value) == 1 and isinstance(value[0], dict) and "role" in value[0]:
+        value = value[0].get("content")
+    if isinstance(value, list) and all(isinstance(block, dict) and "type" in block for block in value):
+        value = "".join(block.get("text", "") for block in value if block["type"] == "text")
+    return value
 
 
 def parse_document(value: Any) -> Any:
-    if isinstance(value, list) and len(value) == 1 and isinstance(value[0], dict):
-        value = value[0].get("content")
+    value = response_text(value)
     if isinstance(value, str):
         try:
-            return json.loads(value)
+            return json.loads(REASONING_PREFIX.sub("", value, count=1))
         except json.JSONDecodeError:
             return None
     return value

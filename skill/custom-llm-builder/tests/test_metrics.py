@@ -1,3 +1,4 @@
+import json
 from metrics import extraction_metrics
 
 
@@ -29,3 +30,15 @@ def test_main_argument_exact_match_uses_span_sets():
     gold = {**EVENT, "treatment": ["aspirin", "treatment"]}
     metrics = extraction_metrics({"events": [reordered]}, {"events": [gold]}, TEXT)
     assert metrics["main_argument_exact_match"] == 1.0
+
+
+def test_leading_reasoning_block_is_ignored_but_other_text_is_not():
+    document = json.dumps({"events": [EVENT]})
+    assert extraction_metrics(f"<think>\n\n</think>\n\n{document}", {"events": [EVENT]}, TEXT)["strict_event_f1"] == 1.0
+    assert extraction_metrics(f"Here is the JSON: {document}", {"events": [EVENT]}, TEXT)["valid_format"] == 0.0
+
+
+def test_provider_content_blocks_use_only_text_blocks():
+    document = json.dumps({"events": [EVENT]})
+    blocks = [{"type": "reasoning", "summary": [{"type": "summary_text", "text": ""}]}, {"type": "text", "text": document}]
+    assert extraction_metrics(blocks, {"events": [EVENT]}, TEXT)["strict_event_f1"] == 1.0

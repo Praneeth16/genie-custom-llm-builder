@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from metrics import extraction_metrics
+from metrics import extraction_metrics, response_text
 from task_adapter import get_adapter
 
 
@@ -41,7 +41,7 @@ def _fmapi_prediction(client: Any, endpoint: str, messages: list[dict[str, str]]
         try:
             response = client.predict(endpoint=endpoint, inputs={"messages": messages, "max_tokens": 512})
             usage = response.get("usage") or {}
-            return response["choices"][0]["message"]["content"], {
+            return response_text(response["choices"][0]["message"]["content"]), {
                 key: int(usage[key]) for key in ("prompt_tokens", "completion_tokens", "total_tokens") if key in usage
             }
         except Exception as error:
@@ -106,12 +106,11 @@ def main() -> None:
     metrics.update({f"usage_{key}": value for key, value in usage.items()})
     tags = dict(tag.split("=", 1) for tag in args.tag)
     report = {"metrics": metrics, "usage": usage, "elapsed_seconds": elapsed, "rows": len(rows)}
-    with mlflow.start_run(tags=tags) as run:
-        mlflow.log_metrics(metrics)
-        if args.experiment_name:
-            mlflow.log_params({"model": args.fmapi_endpoint or args.base_model, "shots": args.few_shot, "seed": args.seed})
-        mlflow.log_dict({"rows": [{"prediction": prediction, **score} for prediction, score in zip(predictions, per_row)]}, "predictions.json")
-        report["mlflow_run_id"] = run.info.run_id
+    with mlflow.start_run():
+        with mlflow.start_run(nested=True, run_name=tags.get("step", "evaluate"), tags=tags) as run:
+            mlflow.log_metrics(metrics)
+            mlflow.log_dict({"rows": [{"prediction": prediction, **score} for prediction, score in zip(predictions, per_row)]}, "predictions.json")
+            report["mlflow_run_id"] = run.info.run_id
     if args.output:
         Path(args.output).write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))

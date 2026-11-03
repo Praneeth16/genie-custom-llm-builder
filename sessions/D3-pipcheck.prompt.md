@@ -1,0 +1,3 @@
+Project lead review of run `190924467921298`: the failure is a false positive. `tabfm` is an unrelated package in the image; a whole-environment `pip check` will always fail there. I changed `run_sft_phase.py` so the torch-changed guard runs first, and `pip check` fails only on conflicts whose first package is in the training stack (unrelated lines are recorded in the report). I added the rule to `references/air-glue.md`. Please review my edit.
+
+You are approved for exactly one more H100 submission of the SFT phase workload (dry-run, new idempotency key), and then follow the original session D instructions to the end. Same rule as before: if setup fails again, stop, write the exact error and diagnosis, and do not resubmit.
