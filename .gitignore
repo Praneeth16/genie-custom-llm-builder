@@ -5,3 +5,5 @@ uv.lock
 .env
 runs/
 *.safetensors
+examples/*/data/*.jsonl
+!examples/*/data/sample*.jsonl

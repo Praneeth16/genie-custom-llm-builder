@@ -1,0 +1,87 @@
+project: ade-phee
+phase: 1
+
+task:
+  name: Pharmacovigilance adverse drug event extraction
+  adapter: phee
+  input: One sentence from a medical case report.
+  output: JSON containing zero or more pharmacovigilance events.
+
+data:
+  name: PHEE V2
+  repository: https://github.com/ZhaoyueSun/phee-with-chatgpt
+  license: MIT
+  source_commit: a90c680b08464e731635eb2d2f2c49be6ad5e3e5
+  splits: Use the upstream train, dev, and test splits without reshuffling.
+  mapping:
+    event_type: Preserve Adverse_event or Potential_therapeutic_event.
+    trigger: Use Trigger.text when it contains exactly one contiguous verbatim span.
+    subject: Use Subject.text when it contains exactly one contiguous verbatim span; use null when absent or not representable.
+    treatment: Use Treatment.text when it contains exactly one contiguous verbatim span.
+    effect: Use Effect.text when it contains exactly one contiguous verbatim span.
+    incompatible_gold: Drop only the incompatible event, keep the sentence, and report every reason in the data card. Never infer a missing role or merge discontinuous or multiple spans.
+
+output_schema:
+  type: object
+  additionalProperties: false
+  required: [events]
+  properties:
+    events:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        required: [event_type, trigger, subject, treatment, effect]
+        properties:
+          event_type:
+            enum: [Adverse_event, Potential_therapeutic_event]
+          trigger:
+            type: string
+            constraint: Must be copied verbatim from the input.
+          subject:
+            type: [string, "null"]
+            constraint: A string must be copied verbatim from the input.
+          treatment:
+            type: string
+            constraint: Must be copied verbatim from the input.
+          effect:
+            type: string
+            constraint: Must be copied verbatim from the input.
+
+metrics:
+  primary:
+    name: gated_strict_event_f1
+    definition: Invalid JSON, schema violations, invalid event types, or non-verbatim spans score zero. Valid outputs use one-to-one event matching and strict event F1 over event type, trigger, treatment, and effect.
+  secondary:
+    - valid_format_rate
+    - phee_main_argument_exact_match
+    - phee_main_argument_token_f1
+
+quality_target:
+  split: dev
+  metric: gated_strict_event_f1
+  target: best_frontier_few_shot_baseline + 0.05
+  status: Fill in the numeric threshold after phase 2 baselines.
+
+performance_targets:
+  batch_throughput: At least 20 sentences per second on one H100.
+  cost: Cost per 1,000 sentences must be lower than the best frontier model used for the baseline.
+
+base_model: Qwen/Qwen3-4B-Instruct-2507
+
+databricks:
+  profile: fe-vm-lakebase-praneeth
+  catalog: serverless_lakebase_praneeth_catalog
+  schema: custom_llm
+  volume: artifacts
+  data_root: /Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/data/phee_v2
+  train: /Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/data/phee_v2/train.jsonl
+  dev: /Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/data/phee_v2/dev.jsonl
+  test: /Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/data/phee_v2/test.jsonl
+  data_card: /Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/data/phee_v2/data_card.md
+
+phase_1_gate:
+  schema_checked: true
+  metric_contract_checked: true
+  hand_checked_dev_rows: 5
+  ai_runtime_runs: 0

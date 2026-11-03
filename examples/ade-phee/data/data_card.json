@@ -1,0 +1,93 @@
+{
+  "source": "https://github.com/ZhaoyueSun/phee-with-chatgpt.git",
+  "version": "V2",
+  "source_commit": "a90c680b08464e731635eb2d2f2c49be6ad5e3e5",
+  "license": "MIT",
+  "source_record_counts": {
+    "train": 2898,
+    "dev": 961,
+    "test": 968
+  },
+  "converted_record_counts": {
+    "train": 2898,
+    "dev": 961,
+    "test": 968
+  },
+  "source_event_counts": {
+    "train": 3004,
+    "dev": 1003,
+    "test": 1010
+  },
+  "retained_event_counts": {
+    "train": 2473,
+    "dev": 808,
+    "test": 815
+  },
+  "invalid_gold_by_reason": {
+    "train": {
+      "discontinuous_effect": 140,
+      "discontinuous_subject": 45,
+      "discontinuous_treatment": 170,
+      "dropped_events": 531,
+      "missing_effect": 223,
+      "missing_treatment": 1,
+      "multiple_effect": 25,
+      "multiple_subject": 3,
+      "multiple_treatment": 10,
+      "records_with_no_retained_events": 472,
+      "subjects_mapped_to_null": 39
+    },
+    "dev": {
+      "discontinuous_effect": 36,
+      "discontinuous_subject": 9,
+      "discontinuous_treatment": 61,
+      "dropped_events": 195,
+      "missing_effect": 94,
+      "multiple_effect": 11,
+      "multiple_subject": 1,
+      "multiple_treatment": 2,
+      "records_with_no_retained_events": 173,
+      "subjects_mapped_to_null": 8
+    },
+    "test": {
+      "discontinuous_effect": 38,
+      "discontinuous_subject": 16,
+      "discontinuous_treatment": 54,
+      "dropped_events": 195,
+      "missing_effect": 107,
+      "multiple_effect": 8,
+      "multiple_subject": 2,
+      "multiple_treatment": 2,
+      "nonverbatim_effect": 1,
+      "records_with_no_retained_events": 165,
+      "subjects_mapped_to_null": 14
+    }
+  },
+  "invalid_gold_totals": {
+    "discontinuous_effect": 214,
+    "discontinuous_subject": 70,
+    "discontinuous_treatment": 285,
+    "dropped_events": 921,
+    "missing_effect": 424,
+    "missing_treatment": 1,
+    "multiple_effect": 44,
+    "multiple_subject": 6,
+    "multiple_treatment": 14,
+    "nonverbatim_effect": 1,
+    "records_with_no_retained_events": 810,
+    "subjects_mapped_to_null": 61
+  },
+  "normalized_exact_overlap": {
+    "train_dev": 0,
+    "train_test": 0,
+    "dev_test": 0
+  },
+  "near_duplicate_pairs": {
+    "definition": "cross-split token-set Jaccard >= 0.90, excluding normalized exact matches",
+    "counts": {
+      "train_dev": 0,
+      "train_test": 0,
+      "dev_test": 0
+    }
+  }
+}
