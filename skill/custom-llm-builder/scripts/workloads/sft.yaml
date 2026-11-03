@@ -1,0 +1,12 @@
+experiment_name: custom_llm_sft
+mlflow_experiment_directory: /Workspace/Shared/custom_llm
+mlflow_run_name: qwen3_4b_sft
+compute: {accelerator_type: GPU_1xH100, num_accelerators: 1}
+environment:
+  version: databricks_ai_v6
+  dependencies: ["trl==1.15.0", "unsloth==2026.11.1"]
+code_source: {root_path: ".."}
+command: python $CODE_SOURCE_PATH/train_sft.py --dataset "$TRAIN_DATA" --output "$ADAPTER_OUTPUT"
+timeout_minutes: 180
+max_retries: 0
+# A10 note: SFT for a 4B LoRA should fit; confirm with the probe.

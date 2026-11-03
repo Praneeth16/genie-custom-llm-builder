@@ -1,0 +1,12 @@
+experiment_name: custom_llm_grpo
+mlflow_experiment_directory: /Workspace/Shared/custom_llm
+mlflow_run_name: qwen3_4b_grpo
+compute: {accelerator_type: GPU_1xH100, num_accelerators: 1}
+environment:
+  version: databricks_ai_v6
+  dependencies: ["trl==1.15.0", "unsloth==2026.11.1"]
+code_source: {root_path: ".."}
+command: python $CODE_SOURCE_PATH/train_grpo.py --model "$SFT_MODEL" --dataset "$TRAIN_DATA" --output "$ADAPTER_OUTPUT"
+timeout_minutes: 240
+max_retries: 0
+# A10 note: use 4-bit weights and reduce num_generations after a successful probe.

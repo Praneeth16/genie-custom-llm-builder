@@ -1,0 +1,4 @@
+interface:
+  display_name: "Custom LLM Builder"
+  short_description: "Build measured task-specific small open LLMs."
+  default_prompt: "Use $custom-llm-builder to build and evaluate a small open LLM for my verifiable task."

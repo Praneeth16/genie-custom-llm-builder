@@ -1,0 +1,12 @@
+experiment_name: custom_llm_probe
+mlflow_experiment_directory: /Workspace/Shared/custom_llm
+mlflow_run_name: probe_30_steps
+compute: {accelerator_type: GPU_1xH100, num_accelerators: 1}
+environment:
+  version: databricks_ai_v6
+  dependencies: ["trl==1.15.0", "unsloth==2026.11.1"]
+code_source: {root_path: ".."}
+command: python $CODE_SOURCE_PATH/probe.py python $CODE_SOURCE_PATH/train_sft.py --dataset "$TRAIN_DATA" --output "$ADAPTER_OUTPUT"
+timeout_minutes: 90
+max_retries: 0
+# A10 note: use GPU_1xA10, 4-bit weights, and fewer GRPO generations after probing.

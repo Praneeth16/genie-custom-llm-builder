@@ -1,0 +1,11 @@
+experiment_name: custom_llm_eval
+mlflow_experiment_directory: /Workspace/Shared/custom_llm
+mlflow_run_name: frozen_test_eval
+compute: {accelerator_type: GPU_1xH100, num_accelerators: 1}
+environment:
+  version: databricks_ai_v6
+code_source: {root_path: ".."}
+command: python $CODE_SOURCE_PATH/evaluate.py --dataset "$EVAL_DATA" --model "$MODEL_PATH"
+timeout_minutes: 120
+max_retries: 0
+# A10 note: acceptable for batch evaluation when the model and adapter fit.
