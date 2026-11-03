@@ -72,8 +72,8 @@ metrics:
 quality_target:
   split: dev
   metric: gated_strict_event_f1
-  target: best_frontier_few_shot_baseline + 0.05
-  status: Fill in the numeric threshold after phase 2 baselines.
+  target: 0.7611642074347374
+  status: Best frontier few-shot dev baseline (0.7111642074347374) + 0.05.
 
 performance_targets:
   batch_throughput: At least 20 sentences per second on one H100.

@@ -1,0 +1,51 @@
+experiment_name: ade_phee
+mlflow_experiment_directory: /Workspace/Users/praneeth.paikray@databricks.com/custom_llm
+mlflow_run_name: ade-phee-base-baselines-signals
+compute:
+  num_accelerators: 1
+  accelerator_type: GPU_1xH100
+environment:
+  version: databricks_ai_v6
+env_variables:
+  VLLM_USE_FLASHINFER_SAMPLER: "0"
+code_source:
+  root_path: ../../skill/custom-llm-builder
+command: |-
+  set -euo pipefail
+  cd "$CODE_SOURCE_PATH"
+  python - <<'PY'
+  import importlib.metadata
+  for package in ("torch", "transformers", "trl", "vllm", "unsloth", "peft"):
+      try:
+          version = importlib.metadata.version(package)
+      except importlib.metadata.PackageNotFoundError:
+          version = "not installed"
+      print(f"{package}=={version}")
+  PY
+  DATA_ROOT=/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/data/phee_v2
+  RUN_ROOT=/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/ade_phee_base_baselines_signals
+  mkdir -p "$RUN_ROOT"
+  python scripts/evaluate.py \
+    --dataset "$DATA_ROOT/dev.jsonl" \
+    --base-model Qwen/Qwen3-4B-Instruct-2507 \
+    --few-shot 0 \
+    --seed 42 \
+    --output "$RUN_ROOT/qwen3_4b_zero_shot.json" \
+    --tag phase=baseline --tag split=dev --tag model=Qwen/Qwen3-4B-Instruct-2507 --tag shots=0
+  python scripts/evaluate.py \
+    --dataset "$DATA_ROOT/dev.jsonl" \
+    --train-dataset "$DATA_ROOT/train.jsonl" \
+    --base-model Qwen/Qwen3-4B-Instruct-2507 \
+    --few-shot 5 \
+    --seed 42 \
+    --output "$RUN_ROOT/qwen3_4b_five_shot.json" \
+    --tag phase=baseline --tag split=dev --tag model=Qwen/Qwen3-4B-Instruct-2507 --tag shots=5
+  python scripts/signals.py \
+    --model Qwen/Qwen3-4B-Instruct-2507 \
+    --dev-dataset "$DATA_ROOT/dev.jsonl" \
+    --subset-size 64 \
+    --samples 8 \
+    --seed 42 \
+    --output "$RUN_ROOT/signals.json"
+max_retries: 0
+timeout_minutes: 120

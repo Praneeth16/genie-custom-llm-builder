@@ -6,6 +6,7 @@ import statistics
 from pathlib import Path
 
 from metrics import extraction_metrics
+from task_adapter import get_adapter
 
 
 def main() -> None:
@@ -15,12 +16,15 @@ def main() -> None:
     parser.add_argument("--subset-size", type=int, default=64)
     parser.add_argument("--samples", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--output")
     args = parser.parse_args()
     import mlflow
     from vllm import LLM, SamplingParams
     rows = [json.loads(line) for line in Path(args.dev_dataset).read_text().splitlines() if line.strip()][:args.subset_size]
+    adapter = get_adapter({"adapter": "phee"})
+    prompts = [adapter.prompt_messages(row["input_text"]) for row in rows]
     engine = LLM(model=args.model)
-    outputs = engine.chat([row["prompt"] for row in rows], SamplingParams(n=args.samples, temperature=1.0, max_tokens=512, seed=args.seed))
+    outputs = engine.chat(prompts, SamplingParams(n=args.samples, temperature=1.0, max_tokens=512, seed=args.seed))
     reward_groups, all_metrics = [], []
     for row, output in zip(rows, outputs):
         group = [extraction_metrics(item.text, row["gold"], row["input_text"]) for item in output.outputs]
@@ -35,6 +39,8 @@ def main() -> None:
     }
     with mlflow.start_run():
         mlflow.log_metrics(report)
+    if args.output:
+        Path(args.output).write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
 
 

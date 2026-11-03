@@ -1,0 +1,7 @@
+{
+  "valid_format_rate": 0.759765625,
+  "mean_reward": 0.21814812809833248,
+  "mean_within_prompt_reward_std": 0.03301805987348779,
+  "fraction_zero_reward_std": 0.75,
+  "empty_output_rate": 0.275390625
+}
