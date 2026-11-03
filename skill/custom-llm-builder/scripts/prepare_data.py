@@ -8,6 +8,9 @@ import subprocess
 from pathlib import Path
 from typing import Any, Iterable
 
+from metrics import validate_gold
+from task_adapter import get_adapter
+
 
 REPOSITORY = "https://github.com/ZhaoyueSun/phee-with-chatgpt.git"
 
@@ -50,13 +53,13 @@ def convert(record: dict[str, Any]) -> dict[str, Any]:
             "effect": first(event, ("effect", "adverse_effect")),
         })
     answer = {"events": events}
+    validate_gold(answer, text)
+    adapter = get_adapter({"adapter": "phee"})
     return {
         "input_text": text,
         "gold": answer,
-        "messages": [
-            {"role": "user", "content": f"Extract events as JSON.\nSentence: {text}"},
-            {"role": "assistant", "content": json.dumps(answer, ensure_ascii=False)},
-        ],
+        "prompt": adapter.prompt_messages(text),
+        "completion": [{"role": "assistant", "content": json.dumps(answer, ensure_ascii=False)}],
     }
 
 

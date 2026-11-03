@@ -2,6 +2,13 @@
 
 Measure signals before choosing. Log `strategy`, `strategy_reason`, `train_size`, `valid_format_rate`, `reward_variance`, `gold_labels_present`, and `teacher_logprobs_available` as MLflow tags or metrics.
 
+Run `scripts/signals.py` on a fixed development subset before choosing RL. Starting thresholds are decision aids, not established facts:
+
+- If valid-format rate is below 0.5, use SFT before RL.
+- If more than 0.6 of prompts have zero reward standard deviation, RL has little measured signal; prefer SFT, distillation, or revise sampling and reward.
+- If mean reward already exceeds the task-card target and latency and cost also pass, stop.
+- Otherwise, treat nonzero within-prompt reward variation as necessary but not sufficient evidence for RL.
+
 | Measured signal | First method to test |
 |---|---|
 | Prompt baseline meets all task-card targets | Stop. Ship the prompt. |

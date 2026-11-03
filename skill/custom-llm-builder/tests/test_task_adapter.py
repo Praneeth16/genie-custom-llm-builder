@@ -13,6 +13,10 @@ def test_loads_json_compatible_yaml_task_card(tmp_path):
     assert adapter.name == "phee"
     assert adapter.output_schema == PHEE_SCHEMA
     assert "Example sentence" in adapter.prompt("Example sentence")
+    messages = adapter.prompt_messages("Example sentence")
+    assert "verbatim" in messages[0]["content"]
+    assert json.dumps(PHEE_SCHEMA, separators=(",", ":")) in messages[0]["content"]
+    assert all(message["role"] != "assistant" for message in messages)
 
 
 def test_phee_adapter_metric_is_reward():

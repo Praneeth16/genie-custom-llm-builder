@@ -8,39 +8,42 @@ from typing import Any, Callable
 
 
 PHEE_SCHEMA = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["events"],
-    "properties": {
-        "events": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["event_type", "trigger", "subject", "treatment", "effect"],
-                "properties": {
-                    "event_type": {"enum": ["Adverse_event", "Potential_therapeutic_event"]},
-                    "trigger": {"type": "string"},
-                    "subject": {"type": ["string", "null"]},
-                    "treatment": {"type": "string"},
-                    "effect": {"type": "string"},
-                },
-            },
-        }
-    },
+    "type": "object", "additionalProperties": False, "required": ["events"],
+    "properties": {"events": {"type": "array", "items": {
+        "type": "object", "additionalProperties": False,
+        "required": ["event_type", "trigger", "subject", "treatment", "effect"],
+        "properties": {
+            "event_type": {"enum": ["Adverse_event", "Potential_therapeutic_event"]},
+            "trigger": {"type": "string"}, "subject": {"type": ["string", "null"]},
+            "treatment": {"type": "string"}, "effect": {"type": "string"},
+        },
+    }}},
 }
 
 
 @dataclass(frozen=True)
 class TaskAdapter:
     name: str
-    prompt_template: str
+    instruction: str
     output_schema: dict[str, Any]
     metric_name: str
     metric: Callable[..., float]
 
+    def prompt_messages(self, input_text: str, examples: list[dict[str, Any]] | None = None) -> list[dict[str, str]]:
+        messages: list[dict[str, str]] = [{"role": "system", "content": self.instruction}]
+        for example in examples or []:
+            messages.extend(self.example_messages(example["input_text"], example["gold"]))
+        messages.append({"role": "user", "content": f"Input:\n{input_text}"})
+        return messages
+
+    def example_messages(self, input_text: str, gold: Any) -> list[dict[str, str]]:
+        return [
+            {"role": "user", "content": f"Input:\n{input_text}"},
+            {"role": "assistant", "content": json.dumps(gold, ensure_ascii=False)},
+        ]
+
     def prompt(self, input_text: str) -> str:
-        return self.prompt_template.format(input=input_text)
+        return self.prompt_messages(input_text)[-1]["content"]
 
 
 def load_task_card(path: str | Path) -> dict[str, Any]:
@@ -59,39 +62,27 @@ def load_task_card(path: str | Path) -> dict[str, Any]:
 
 
 def _phee_metric(prediction: Any, gold: Any, input_text: str) -> float:
-    from rewards import extraction_reward
-
-    return extraction_reward(prediction, gold, input_text)
+    from metrics import extraction_metrics
+    return extraction_metrics(prediction, gold, input_text)["strict_event_f1"]
 
 
 def get_adapter(task_card: dict[str, Any]) -> TaskAdapter:
     adapter_name = task_card.get("adapter", task_card.get("task", {}).get("adapter", "phee"))
     if adapter_name == "phee":
+        schema = json.dumps(PHEE_SCHEMA, separators=(",", ":"))
         return TaskAdapter(
-            name="phee",
-            prompt_template=(
-                "Extract pharmacovigilance events from the sentence. Return only JSON matching "
-                "the provided schema. Copy every extracted span verbatim.\nSentence: {input}"
-            ),
-            output_schema=PHEE_SCHEMA,
-            metric_name="strict_event_f1",
-            metric=_phee_metric,
+            "phee",
+            f"Extract pharmacovigilance events. Return only JSON matching this schema: {schema}. Copy every extracted string verbatim from the input.",
+            PHEE_SCHEMA, "strict_event_f1", _phee_metric,
         )
     custom = task_card.get("task", task_card)
     required = ("prompt_template", "output_schema", "metric_name")
     missing = [key for key in required if key not in custom]
     if missing:
         raise ValueError(f"custom task card is missing: {', '.join(missing)}")
-    metric_name = custom["metric_name"]
-    if metric_name != "strict_event_f1":
+    if custom["metric_name"] != "strict_event_f1":
         raise ValueError("custom metrics must be implemented and registered before training")
-    return TaskAdapter(
-        name=str(adapter_name),
-        prompt_template=custom["prompt_template"],
-        output_schema=custom["output_schema"],
-        metric_name=metric_name,
-        metric=_phee_metric,
-    )
+    return TaskAdapter(str(adapter_name), custom["prompt_template"], custom["output_schema"], custom["metric_name"], _phee_metric)
 
 
 def main() -> None:
@@ -99,8 +90,7 @@ def main() -> None:
     parser.add_argument("task_card")
     parser.add_argument("--input", required=True)
     args = parser.parse_args()
-    adapter = get_adapter(load_task_card(args.task_card))
-    print(adapter.prompt(args.input))
+    print(json.dumps(get_adapter(load_task_card(args.task_card)).prompt_messages(args.input)))
 
 
 if __name__ == "__main__":

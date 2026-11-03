@@ -6,7 +6,11 @@ environment:
   version: databricks_ai_v6
   dependencies: ["trl==1.15.0", "unsloth==2026.11.1"]
 code_source: {root_path: ".."}
-command: python $CODE_SOURCE_PATH/train_sft.py --dataset "$TRAIN_DATA" --output "$ADAPTER_OUTPUT"
+command: python $CODE_SOURCE_PATH/train_sft.py --train-dataset "$TRAIN_DATA" --dev-dataset "$DEV_DATA" --output "$ADAPTER_OUTPUT"
+env_variables:
+  TRAIN_DATA: /Volumes/catalog/schema/volume/train.jsonl
+  DEV_DATA: /Volumes/catalog/schema/volume/dev.jsonl
+  ADAPTER_OUTPUT: /Volumes/catalog/schema/volume/sft_adapter
 timeout_minutes: 180
 max_retries: 0
 # A10 note: SFT for a 4B LoRA should fit; confirm with the probe.

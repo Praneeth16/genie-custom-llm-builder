@@ -6,7 +6,12 @@ environment:
   version: databricks_ai_v6
   dependencies: ["trl==1.15.0", "unsloth==2026.11.1"]
 code_source: {root_path: ".."}
-command: python $CODE_SOURCE_PATH/train_grpo.py --model "$SFT_MODEL" --dataset "$TRAIN_DATA" --output "$ADAPTER_OUTPUT"
+command: python $CODE_SOURCE_PATH/train_grpo.py --base-model "$BASE_MODEL" --init-adapter "$SFT_ADAPTER" --dataset "$TRAIN_DATA" --output "$ADAPTER_OUTPUT"
+env_variables:
+  BASE_MODEL: Qwen/Qwen3-4B-Instruct-2507
+  SFT_ADAPTER: /Volumes/catalog/schema/volume/sft_adapter
+  TRAIN_DATA: /Volumes/catalog/schema/volume/train.jsonl
+  ADAPTER_OUTPUT: /Volumes/catalog/schema/volume/grpo_adapter
 timeout_minutes: 240
 max_retries: 0
 # A10 note: use 4-bit weights and reduce num_generations after a successful probe.

@@ -5,7 +5,11 @@ compute: {accelerator_type: GPU_1xH100, num_accelerators: 1}
 environment:
   version: databricks_ai_v6
 code_source: {root_path: ".."}
-command: python $CODE_SOURCE_PATH/evaluate.py --dataset "$EVAL_DATA" --model "$MODEL_PATH"
+command: python $CODE_SOURCE_PATH/evaluate.py --dataset "$EVAL_DATA" --base-model "$BASE_MODEL" --adapter "$ADAPTER_PATH"
+env_variables:
+  EVAL_DATA: /Volumes/catalog/schema/volume/test.jsonl
+  BASE_MODEL: Qwen/Qwen3-4B-Instruct-2507
+  ADAPTER_PATH: /Volumes/catalog/schema/volume/best_adapter
 timeout_minutes: 120
 max_retries: 0
 # A10 note: acceptable for batch evaluation when the model and adapter fit.

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
-import time
 
 
 def main() -> None:
@@ -12,15 +12,16 @@ def main() -> None:
     args = parser.parse_args()
     if not any(part == "--max-steps" or part.startswith("--max-steps=") for part in args.command):
         args.command.extend(["--max-steps", "30"])
-    started = time.perf_counter()
     result = subprocess.run(args.command, check=False)
-    elapsed = time.perf_counter() - started
-    try:
-        import torch
-        peak_memory = torch.cuda.max_memory_allocated() if torch.cuda.is_available() else 0
-    except ImportError:
-        peak_memory = 0
-    print(json.dumps({"returncode": result.returncode, "steps": 30, "elapsed_seconds": elapsed, "seconds_per_step": elapsed / 30, "peak_memory_bytes": peak_memory, "required_rl_metrics": ["completions/clipped_ratio", "frac_reward_zero_std"]}))
+    metrics: dict[str, float | None] = {}
+    run_id = os.environ.get("MLFLOW_RUN_ID")
+    if run_id:
+        from mlflow import MlflowClient
+        client = MlflowClient()
+        for name in ("probe_peak_gpu_memory_bytes", "probe_seconds_per_step", "completions/clipped_ratio", "frac_reward_zero_std"):
+            history = client.get_metric_history(run_id, name)
+            metrics[name] = max((point.value for point in history), default=None)
+    print(json.dumps({"returncode": result.returncode, "steps": 30, "metrics": metrics}))
     raise SystemExit(result.returncode)
 
 

@@ -58,3 +58,13 @@ def test_off_schema_output_is_zero():
 def test_trl_reward_signature_batches_rows():
     scores = gated_extraction_reward([json.dumps(GOLD), '{"events": []}'], gold=[GOLD, GOLD], input_text=[TEXT, TEXT])
     assert scores == [1.0, 0.0]
+
+
+def test_trl_conversational_completion_is_parsed():
+    completion = [{"role": "assistant", "content": json.dumps(GOLD)}]
+    assert gated_extraction_reward([completion], gold=[GOLD], input_text=[TEXT]) == [1.0]
+
+
+def test_invalid_gold_fails_loudly():
+    with pytest.raises(ValueError, match="gold output"):
+        extraction_reward(GOLD, {"events": [{**EVENT, "effect": "fabricated"}]}, TEXT)

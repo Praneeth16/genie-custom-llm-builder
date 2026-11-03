@@ -6,7 +6,13 @@ environment:
   version: databricks_ai_v6
   dependencies: ["trl==1.15.0", "unsloth==2026.11.1"]
 code_source: {root_path: ".."}
-command: python $CODE_SOURCE_PATH/probe.py python $CODE_SOURCE_PATH/train_sft.py --dataset "$TRAIN_DATA" --output "$ADAPTER_OUTPUT"
+command: |-
+  python -c 'import torch,transformers,trl,vllm,unsloth; print({"torch":torch.__version__,"transformers":transformers.__version__,"trl":trl.__version__,"vllm":vllm.__version__,"unsloth":unsloth.__version__})'
+  python $CODE_SOURCE_PATH/probe.py python $CODE_SOURCE_PATH/train_sft.py --train-dataset "$TRAIN_DATA" --dev-dataset "$DEV_DATA" --output "$ADAPTER_OUTPUT"
+env_variables:
+  TRAIN_DATA: /Volumes/catalog/schema/volume/train.jsonl
+  DEV_DATA: /Volumes/catalog/schema/volume/dev.jsonl
+  ADAPTER_OUTPUT: /Volumes/catalog/schema/volume/probe_adapter
 timeout_minutes: 90
 max_retries: 0
 # A10 note: use GPU_1xA10, 4-bit weights, and fewer GRPO generations after probing.
