@@ -1,0 +1,26 @@
+{
+  "metrics": {
+    "strict_event_f1": 0.6350627311349064,
+    "valid_format": 0.9473140495867769,
+    "empty_output": 0.012396694214876033,
+    "event_precision": 0.6279546582298974,
+    "event_recall": 0.6560506970322507,
+    "main_argument_exact_match": 0.4796463006690279,
+    "main_argument_token_f1": 0.6394180857380254,
+    "subject_exact_match": 0.5969106650924834,
+    "subject_token_f1": 0.7260409812154685,
+    "reasoning_prefix_rate": 0.0,
+    "examples_per_second": 2.7122429256243623,
+    "usage_prompt_tokens": 369370,
+    "usage_completion_tokens": 105818,
+    "usage_total_tokens": 475188
+  },
+  "usage": {
+    "prompt_tokens": 369370,
+    "completion_tokens": 105818,
+    "total_tokens": 475188
+  },
+  "elapsed_seconds": 356.900184291997,
+  "rows": 968,
+  "mlflow_run_id": "d02f3ffa20ec4e48abc4dd1f8964cdb1"
+}

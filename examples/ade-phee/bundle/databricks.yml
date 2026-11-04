@@ -1,0 +1,49 @@
+bundle:
+  name: ade_phee_batch_score
+
+sync:
+  paths:
+    - ../..
+
+artifacts:
+  code_source:
+    type: tgz
+    path: ../..
+    include:
+      - ade-phee
+    files:
+      - source: ./dist/code_source.tgz
+
+targets:
+  dev:
+    mode: development
+    default: true
+
+resources:
+  jobs:
+    ade_phee_batch_score:
+      name: ade_phee_batch_score
+      schedule:
+        quartz_cron_expression: "0 0 3 ? * MON *"
+        timezone_id: Asia/Kolkata
+        pause_status: PAUSED
+      tasks:
+        - task_key: ade_phee_batch_score
+          environment_key: default
+          max_retries: 0
+          retry_on_timeout: false
+          timeout_seconds: 7200
+          ai_runtime_task:
+            experiment: ade_phee_batch_score
+            deployments:
+              - command_path: ./generated_artifacts/command.sh
+                compute:
+                  accelerator_type: GPU_1xH100
+                  accelerator_count: 1
+            code_source_path: ./dist/code_source.tgz
+            mlflow_run: ade_phee_champion_batch_score
+            mlflow_experiment_directory: /Workspace/Users/praneeth.paikray@databricks.com/custom_llm
+      environments:
+        - environment_key: default
+          spec:
+            base_environment: workspace-base-environments/databricks_ai_v6

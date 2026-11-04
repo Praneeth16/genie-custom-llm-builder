@@ -2,6 +2,10 @@
 
 All quality measurements use the frozen 961-row development split. The test split was not scored.
 
+## Final Candidate Freeze
+
+Frozen at `2026-11-04T12:14:19+05:30`, before any test scoring. GRPO Arm B (0.7818 dev strict event F1) and SFT-full v2 (0.7817) are tied because their 0.0001 gap is far below the 0.0080 noise reference. Per the pre-declared rule that a dev tie goes to the cheaper model, the final candidate is **SFT-full v2** at `/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/sft/adapters/full_v2/`. GRPO Arm B is a pre-declared secondary test result only and is not used for selection. This decision is immutable with respect to the frozen test split.
+
 ## Signals
 
 | Signal | Value | Rule triggered |
@@ -105,3 +109,17 @@ Run `528364182692010` reused the 891-prompt filter and used a generation batch o
 At matched compute, GRPO beat continued SFT by 0.0156 dev strict F1. This is larger than the 0.0080 gap between SFT 2,000 and the original SFT full checkpoint. However, continued SFT regressed by 0.0155 from the SFT-full-v2 starting point, while GRPO improved over that starting point by only 0.00008, far below the noise reference. The honest conclusion is that GRPO protected quality relative to an over-trained SFT control, not that it produced a meaningful improvement over SFT full v2.
 
 The base-versus-tuned rollout check passed: sample texts and reward groups differed, with mean reward 0.7881 for Arm B versus 0.2218 for base, confirming that generation used the GRPO LoRA weights. By dev score only, the final candidate for the untouched test split is Arm B at `/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/rl/adapters/grpo/` with 0.7818 strict event F1.
+
+## Test Results
+
+The final candidate freeze above preceded every test run. The frozen 968-row test split was scored once per declared model with the dev prompt builder and greedy decoding. Claude used concurrency 8; the local vLLM runs used one H100. Local vLLM did not emit token-usage telemetry.
+
+| Model | Role | Strict event F1 | Valid rate | PHEE EM | PHEE token F1 | Precision | Recall | Throughput (rows/s) | Tokens |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Claude Sonnet 5.5 zero-shot | baseline | 0.6351 | 0.9473 | 0.4796 | 0.6394 | 0.6280 | 0.6561 | 2.71 | 475,188 |
+| Claude Sonnet 5.5 five-shot | baseline | 0.7083 | 0.9855 | 0.5636 | 0.7173 | 0.7074 | 0.7163 | 2.82 | 1,111,398 |
+| Qwen3-4B five-shot | baseline | 0.3037 | 0.5826 | 0.2273 | 0.3102 | 0.3062 | 0.3029 | 185.78 | n/a (local vLLM) |
+| SFT-full v2 | final | **0.7856** | **0.9969** | **0.6695** | **0.7927** | **0.7906** | **0.7857** | 79.16 | n/a (local vLLM) |
+| GRPO Arm B | secondary | 0.7838 | 0.9969 | 0.6676 | 0.7909 | 0.7878 | 0.7851 | 81.98 | n/a (local vLLM) |
+
+SFT-full v2 remains the shipped model. Its test strict event F1 exceeds the 0.7655 target, and its one-H100 throughput exceeds the 20 sentences/second target. GRPO is reported only as the pre-declared secondary result and does not affect selection.

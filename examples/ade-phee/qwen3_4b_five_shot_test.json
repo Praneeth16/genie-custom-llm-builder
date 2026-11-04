@@ -1,0 +1,19 @@
+{
+  "metrics": {
+    "strict_event_f1": 0.303682767413145,
+    "valid_format": 0.5826446280991735,
+    "empty_output": 0.014462809917355372,
+    "event_precision": 0.3062368306340622,
+    "event_recall": 0.3028902145929503,
+    "main_argument_exact_match": 0.2273301193755739,
+    "main_argument_token_f1": 0.31017272176391564,
+    "subject_exact_match": 0.19300964187327824,
+    "subject_token_f1": 0.24729050172528197,
+    "reasoning_prefix_rate": 0.0,
+    "examples_per_second": 185.77842300876083
+  },
+  "usage": {},
+  "elapsed_seconds": 5.210508218999962,
+  "rows": 968,
+  "mlflow_run_id": "22432fb7b17f4583b4d0f7e80d1f6f6d"
+}

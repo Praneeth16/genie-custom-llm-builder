@@ -1,0 +1,7 @@
+{
+  "rows_written": 50,
+  "parse_valid_rows": 50,
+  "parse_rate": 1.0,
+  "output_table": "serverless_lakebase_praneeth_catalog.custom_llm.ade_events",
+  "model_uri": "models:/serverless_lakebase_praneeth_catalog.custom_llm.ade_extractor@champion"
+}

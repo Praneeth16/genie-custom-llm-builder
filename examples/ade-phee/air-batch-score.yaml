@@ -1,0 +1,23 @@
+experiment_name: ade_phee_batch_score
+mlflow_experiment_directory: /Workspace/Users/praneeth.paikray@databricks.com/custom_llm
+mlflow_run_name: ade_phee_champion_batch_score
+compute:
+  accelerator_type: GPU_1xH100
+  num_accelerators: 1
+environment:
+  version: databricks_ai_v6
+code_source:
+  root_path: .
+command: |-
+  python "$CODE_SOURCE_PATH/batch_score.py" \
+    --input-jsonl "$INPUT_JSONL" \
+    --output-table serverless_lakebase_praneeth_catalog.custom_llm.ade_events \
+    --model-uri models:/serverless_lakebase_praneeth_catalog.custom_llm.ade_extractor@champion \
+    --warehouse-id "$WAREHOUSE_ID" \
+    --run-key weekly-champion
+env_variables:
+  INPUT_JSONL: /Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/data/phee_v2/test.jsonl
+  VLLM_USE_FLASHINFER_SAMPLER: "0"
+  WAREHOUSE_ID: 4d39ac2e32b72a3a
+timeout_minutes: 120
+max_retries: 0

@@ -1,0 +1,26 @@
+experiment_name: ade_phee_phase5
+mlflow_experiment_directory: /Workspace/Users/praneeth.paikray@databricks.com/custom_llm
+mlflow_run_name: ade_phee_test_evaluate_ship_v1
+compute:
+  accelerator_type: GPU_1xH100
+  num_accelerators: 1
+environment:
+  version: databricks_ai_v6
+code_source:
+  root_path: ../..
+command: |-
+  set -euo pipefail
+  DATA=/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/data/phee_v2
+  OUT=/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/phase5
+  SCRIPTS="$CODE_SOURCE_PATH/skill/custom-llm-builder/scripts"
+  EXAMPLE="$CODE_SOURCE_PATH/examples/ade-phee"
+  mkdir -p "$OUT"
+  test -s "$OUT/qwen3_4b_five_shot_test.json" || python "$SCRIPTS/evaluate.py" --dataset "$DATA/test.jsonl" --train-dataset "$DATA/train.jsonl" --base-model Qwen/Qwen3-4B-Instruct-2507 --few-shot 5 --seed 42 --output "$OUT/qwen3_4b_five_shot_test.json" --tag phase=test --tag split=test --tag role=baseline --tag step=qwen3_4b_five_shot_test
+  test -s "$OUT/sft_full_v2_test.json" || python "$SCRIPTS/evaluate.py" --dataset "$DATA/test.jsonl" --base-model Qwen/Qwen3-4B-Instruct-2507 --adapter /Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/sft/adapters/full_v2 --seed 42 --output "$OUT/sft_full_v2_test.json" --tag phase=test --tag split=test --tag role=final --tag step=sft_full_v2_test
+  test -s "$OUT/grpo_arm_b_test.json" || python "$SCRIPTS/evaluate.py" --dataset "$DATA/test.jsonl" --base-model Qwen/Qwen3-4B-Instruct-2507 --adapter /Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/rl/adapters/grpo --seed 42 --output "$OUT/grpo_arm_b_test.json" --tag phase=test --tag split=test --tag role=secondary --tag step=grpo_arm_b_test
+  python "$EXAMPLE/register_and_batch.py"
+env_variables:
+  VLLM_USE_FLASHINFER_SAMPLER: "0"
+  WAREHOUSE_ID: 4d39ac2e32b72a3a
+timeout_minutes: 180
+max_retries: 0
