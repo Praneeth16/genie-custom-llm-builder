@@ -82,3 +82,24 @@ AI Runtime run `81591482554133` tested whether the failed gate was caused by unc
 Setting (b) restored strong within-prompt reward variance but missed the required 0.5 valid-rate floor at 0.4121. Settings (c) and (a) failed both thresholds. The captured samples therefore do not support the trailing-text hypothesis: failures were overwhelmingly unparseable responses, often arbitrary leading content around an otherwise plausible answer, rather than text appended after a parseable JSON document.
 
 No setting passed both zero-std fraction at most 0.6 and valid rate at least 0.5, so the workload correctly stopped before dynamic sampling, the GRPO probe, and both 40-minute arms. No GRPO implementation path was used and no matched-compute RL table exists. The final candidate remains SFT full by dev score only; the test split remains untouched.
+
+### Reference-template Retrain
+
+AI Runtime run `520951822433666` retrained SFT full after forcing the upstream Qwen chat template. The saved rendered training example contains the expected system, user, and assistant turns and no `<think>` block. Training used the same 2,898 rows, three epochs, 1,089 optimizer steps, rank 32, alpha 32, learning rate `2e-4`, and seed 42 as the original full-data run. It consumed 19.26 accelerator minutes, reached loss 0.0593, and peaked at 11.64% H100 memory.
+
+| Model | Dev strict F1 | Valid rate | PHEE EM | Token F1 | Precision | Recall | Reasoning-prefix rate | Accelerator minutes |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| SFT full v2 | 0.7817 | 0.9896 | 0.6703 | 0.7882 | 0.7859 | 0.7828 | 0.0000 | 19.26 train + 2.75 eval |
+| Arm A: continued SFT | — | — | — | — | — | — | — | Not run (probe failure) |
+| Arm B: GRPO | — | — | — | — | — | — | — | Not run (probe failure) |
+
+| Setting | Temperature | Top-p | Top-k | Valid rate | Mean reward | Mean reward std | Zero-std fraction | Corrupt preamble | Broken JSON | Non-verbatim | Gate |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| (b) Qwen recommended | 0.7 | 0.8 | 20 | 0.9980 | 0.7857 | 0.0558 | 0.515625 | 0 | 0 | 1 | Pass |
+| (a) Full vocabulary | 1.0 | 1.0 | -1 | 0.9805 | 0.7511 | 0.1205 | 0.203125 | 0 | 1 | 9 | Pass |
+
+Setting (b) passed first and was selected. Dynamic sampling retained 891 of 2,898 training prompts (30.75%). The template fix eliminated the corrupted-special-token preamble and restored both validity and within-prompt reward variance.
+
+The 10-step probe did not start training. Both the Unsloth path and required plain-TRL fallback failed during `GRPOConfig` validation because `generation_batch_size=4` was not divisible by eight generations. Consequently, neither 40-minute arm nor their final evaluations ran, and no matched-compute GRPO conclusion is available. The local workload configuration now uses eight accumulation steps so the generation batch is divisible by eight, but no additional workload was submitted.
+
+By completed dev score only, the final candidate for the untouched test split is SFT full v2 at `/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/sft/adapters/full_v2/` with 0.7817 strict event F1.

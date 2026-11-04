@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(os.environ["CODE_SOURCE_PATH"]) / "skill/custom-llm-builder/scripts"))
 
 
 def main() -> None:
@@ -20,6 +24,7 @@ def main() -> None:
     from transformers import TrainerCallback
     from trl import SFTConfig, SFTTrainer
     from unsloth import FastLanguageModel
+    from chat_template import use_reference_chat_template
 
     class TimeLimit(TrainerCallback):
         def __init__(self) -> None:
@@ -33,6 +38,7 @@ def main() -> None:
     report = {"step": "sft_plus", "status": "failed", "budget_minutes": args.minutes}
     try:
         model, tokenizer = FastLanguageModel.from_pretrained(args.adapter, max_seq_length=2048, load_in_4bit=False)
+        use_reference_chat_template(tokenizer, "Qwen/Qwen3-4B-Instruct-2507")
         data = load_dataset("json", data_files=args.dataset, split="train")
         config = SFTConfig(
             output_dir="/tmp/sft_plus", num_train_epochs=1000, learning_rate=5e-5,

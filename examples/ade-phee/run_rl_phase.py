@@ -13,7 +13,7 @@ from pathlib import Path
 MODEL = "Qwen/Qwen3-4B-Instruct-2507"
 TRAIN = Path("/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/data/phee_v2/train.jsonl")
 DEV = Path("/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/data/phee_v2/dev.jsonl")
-SFT = Path("/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/sft/adapters/full")
+SFT = Path("/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/sft/adapters/full_v2")
 ROOT = Path("/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/rl")
 CODE = Path(os.environ["CODE_SOURCE_PATH"])
 SCRIPTS = CODE / "skill/custom-llm-builder/scripts"
@@ -81,7 +81,7 @@ def signals(name: str, adapter: Path | None, sampling: dict) -> dict:
 def classify_invalid(report: dict) -> dict[str, int]:
     from metrics import EVENT_KEYS, LIST_FIELDS, extraction_metrics, is_valid_document
     rows = [json.loads(line) for line in DEV.read_text().splitlines() if line.strip()][:64]
-    counts = {"trailing_text_after_json": 0, "reasoning_block_with_content": 0, "broken_json": 0, "non_verbatim_span": 0, "other": 0}
+    counts = {"corrupted_special_token_preamble": 0, "trailing_text_after_json": 0, "reasoning_block_with_content": 0, "broken_json": 0, "non_verbatim_span": 0, "other": 0}
     prefix = re.compile(r"^\s*<think>(.*?)</think>\s*", re.DOTALL)
     decoder = json.JSONDecoder()
     for row, samples in zip(rows, report["samples"]):
@@ -93,6 +93,16 @@ def classify_invalid(report: dict) -> dict[str, int]:
                 counts["reasoning_block_with_content"] += 1
                 continue
             answer = prefix.sub("", sample, count=1)
+            json_start = answer.find("{")
+            if json_start > 0 and any(token in answer[:json_start] for token in ("<tool_call>", "</tool_call>", "<think>", "</think>")):
+                try:
+                    preamble_document = json.loads(answer[json_start:])
+                except json.JSONDecodeError:
+                    pass
+                else:
+                    if is_valid_document(preamble_document, row["input_text"]):
+                        counts["corrupted_special_token_preamble"] += 1
+                        continue
             try:
                 document, end = decoder.raw_decode(answer.lstrip())
             except json.JSONDecodeError:
@@ -170,25 +180,32 @@ def probe_passes(report: dict) -> bool:
 def main() -> None:
     ROOT.mkdir(parents=True, exist_ok=True)
     install()
+    run("train_full_v2", [
+        sys.executable, str(SCRIPTS / "train_sft.py"), "--train-dataset", str(TRAIN),
+        "--dev-dataset", str(DEV), "--output", str(SFT), "--epochs", "3",
+        "--learning-rate", "2e-4", "--seed", "42", "--lora-rank", "32",
+        "--step-name", "train_full_v2", "--phase", "rl",
+        "--result-output", str(ROOT / "train_full_v2.json"),
+    ])
+    evaluate("sft_full_v2", SFT)
     settings = {
         "a": {"temperature": 1.0, "top_p": 1.0, "top_k": -1},
         "b": {"temperature": 0.7, "top_p": 0.8, "top_k": 20},
-        "c": {"temperature": 1.0, "top_p": 0.95, "top_k": -1},
     }
     diagnostics = {}
-    for key in ("a", "b", "c"):
-        report = signals(f"diagnostic_{key}", SFT, settings[key])
+    for key in ("b", "a"):
+        report = signals(f"diagnostic_v2_{key}", SFT, settings[key])
         report["invalid_classification"] = classify_invalid(report)
         report["gate_passes"] = report["fraction_zero_reward_std"] <= 0.6 and report["valid_format_rate"] >= 0.5
-        write(f"diagnostic_{key}", report)
+        write(f"diagnostic_v2_{key}", report)
         diagnostics[key] = report
-    selected = next((key for key in ("b", "c", "a") if diagnostics[key]["gate_passes"]), None)
+    selected = next((key for key in ("b", "a") if diagnostics[key]["gate_passes"]), None)
     comparison = {
-        "step": "sampling_gate", "status": "passed" if selected else "failed",
-        "selected_setting": selected, "selection_order": ["b", "c", "a"],
+        "step": "sampling_gate_v2", "status": "passed" if selected else "failed",
+        "selected_setting": selected, "selection_order": ["b", "a"],
         "settings": {key: {"sampling": settings[key], "valid_format_rate": diagnostics[key]["valid_format_rate"], "fraction_zero_reward_std": diagnostics[key]["fraction_zero_reward_std"], "gate_passes": diagnostics[key]["gate_passes"]} for key in settings},
     }
-    write("sampling_gate", comparison)
+    write("sampling_gate_v2", comparison)
     if selected is None:
         return
     sampling = settings[selected]
@@ -214,7 +231,6 @@ def main() -> None:
     write("grpo_path", {"step": "grpo_path", "status": "completed", "path": path, "probe": probe})
     run("sft_plus", [sys.executable, str(EXAMPLE / "train_sft_plus.py"), "--adapter", str(SFT), "--dataset", str(TRAIN), "--output", str(ROOT / "adapters/sft_plus"), "--result-output", str(ROOT / "sft_plus.json"), "--minutes", "40"])
     run("grpo", [sys.executable, str(EXAMPLE / "train_grpo_arm.py"), *common, "--output", str(ROOT / "adapters/grpo"), "--result-output", str(ROOT / "grpo.json"), "--path", path, "--minutes", "40"])
-    evaluate("sft_full", SFT)
     evaluate("sft_plus", ROOT / "adapters/sft_plus")
     evaluate("grpo", ROOT / "adapters/grpo")
 

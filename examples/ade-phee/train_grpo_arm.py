@@ -3,10 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 from pathlib import Path
 
 os.environ.setdefault("UNSLOTH_VLLM_STANDBY", "1")
+sys.path.insert(0, str(Path(os.environ["CODE_SOURCE_PATH"]) / "skill/custom-llm-builder/scripts"))
 
 
 def main() -> None:
@@ -29,6 +31,7 @@ def main() -> None:
     from datasets import load_dataset
     from transformers import TrainerCallback
     from trl import GRPOConfig, GRPOTrainer
+    from chat_template import use_reference_chat_template
     from rewards import gated_extraction_reward
 
     class Monitor(TrainerCallback):
@@ -69,13 +72,14 @@ def main() -> None:
             base = AutoModelForCausalLM.from_pretrained(args.base_model, torch_dtype=torch.bfloat16)
             model = PeftModel.from_pretrained(base, args.adapter, is_trainable=True)
             tokenizer = AutoTokenizer.from_pretrained(args.adapter)
+        use_reference_chat_template(tokenizer, args.base_model)
         data = load_dataset("json", data_files=args.dataset, split="train")
         config = GRPOConfig(
             output_dir=f"/tmp/{report['step']}_{args.path}", max_steps=args.max_steps,
             num_train_epochs=1000, learning_rate=5e-6, seed=42, report_to="mlflow",
             loss_type="dapo", beta=0.0, epsilon=0.2, epsilon_high=0.28,
             num_generations=8, max_completion_length=256, per_device_train_batch_size=1,
-            gradient_accumulation_steps=4, use_vllm=True, vllm_mode="colocate",
+            gradient_accumulation_steps=8, use_vllm=True, vllm_mode="colocate",
             temperature=args.temperature, top_p=args.top_p, top_k=args.top_k,
         )
         run_name = f"{report['step']}_{args.path}"

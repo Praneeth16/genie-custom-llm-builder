@@ -4,6 +4,7 @@ import argparse
 import concurrent.futures
 import json
 import random
+import re
 import time
 from pathlib import Path
 from typing import Any
@@ -102,6 +103,7 @@ def main() -> None:
     predictions, elapsed, usage = fmapi_predictions(args.fmapi_endpoint, prompts, args.concurrency) if args.fmapi_endpoint else local_predictions(args.base_model, args.adapter, prompts)
     per_row = [extraction_metrics(prediction, row["gold"], row["input_text"]) for prediction, row in zip(predictions, rows)]
     metrics = {key: sum(item[key] for item in per_row) / len(per_row) for key in per_row[0]}
+    metrics["reasoning_prefix_rate"] = sum(bool(re.match(r"^\s*<think>", prediction)) for prediction in predictions) / len(predictions)
     metrics["examples_per_second"] = len(rows) / elapsed
     metrics.update({f"usage_{key}": value for key, value in usage.items()})
     tags = dict(tag.split("=", 1) for tag in args.tag)

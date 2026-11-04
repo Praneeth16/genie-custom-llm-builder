@@ -20,6 +20,7 @@ def main() -> None:
     parser.add_argument("--lora-rank", type=int, default=32)
     parser.add_argument("--result-output")
     parser.add_argument("--step-name", default="sft")
+    parser.add_argument("--phase", default="train")
     args = parser.parse_args()
     if not args.output:
         parser.error("--output or ADAPTER_OUTPUT is required")
@@ -34,19 +35,23 @@ def main() -> None:
     use_reference_chat_template(tokenizer, args.model)
     model = FastLanguageModel.get_peft_model(model, r=args.lora_rank, lora_alpha=32, target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"], use_gradient_checkpointing="unsloth")
     data = load_dataset("json", data_files={"train": args.train_dataset, "dev": args.dev_dataset})
+    first_row = data["train"][0]
+    rendered_training_example = tokenizer.apply_chat_template(
+        first_row["prompt"] + first_row["completion"], tokenize=False
+    )
     config = SFTConfig(output_dir=f"/tmp/{args.step_name}", max_steps=args.max_steps, num_train_epochs=args.epochs, learning_rate=args.learning_rate, seed=args.seed, report_to="mlflow", completion_only_loss=True, eval_strategy="no", save_strategy="no")
     callback = build_probe_callback()
     report = {"step": args.step_name, "status": "failed"}
     started = time.perf_counter()
     try:
         with mlflow.start_run():
-            with mlflow.start_run(nested=True, run_name=args.step_name, tags={"phase": "train", "step": args.step_name, "method": "lora_sft", "model": args.model}) as run:
+            with mlflow.start_run(nested=True, run_name=args.step_name, tags={"phase": args.phase, "step": args.step_name, "method": "lora_sft", "model": args.model}) as run:
                 trainer = SFTTrainer(model=model, processing_class=tokenizer, train_dataset=data["train"], eval_dataset=None, args=config, callbacks=[callback])
                 result = trainer.train()
                 model.save_pretrained(args.output)
                 tokenizer.save_pretrained(args.output)
                 elapsed = time.perf_counter() - started
-                report.update({"status": "completed", "mlflow_run_id": run.info.run_id, "train_rows": len(data["train"]), "optimizer_steps": result.global_step, "train_loss": result.training_loss, "seconds_per_step": elapsed / result.global_step, "peak_memory_fraction": callback.peak_memory_fraction, "accelerator_minutes": elapsed / 60})
+                report.update({"status": "completed", "mlflow_run_id": run.info.run_id, "train_rows": len(data["train"]), "rendered_training_example": rendered_training_example, "optimizer_steps": result.global_step, "train_loss": result.training_loss, "seconds_per_step": elapsed / result.global_step, "peak_memory_fraction": callback.peak_memory_fraction, "accelerator_minutes": elapsed / 60})
                 mlflow.log_metrics({key: value for key, value in report.items() if isinstance(value, (int, float))})
     except Exception as error:
         report["error"] = f"{type(error).__name__}: {error}"

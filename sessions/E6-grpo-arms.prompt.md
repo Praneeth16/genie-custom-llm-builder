@@ -1,0 +1,8 @@
+Good work: the clean template fixed sampling, and the gate passes at setting (b). Project lead review of the GRPO config: accumulation 8 with per-device batch 1 makes each optimizer step one prompt with 8 completions, which is very noisy. Use `per_device_train_batch_size=8`, `gradient_accumulation_steps=4` (32 completions, 4 prompts per step, divisible by `num_generations=8`). Also add a check in `train_grpo.py` that fails fast with a clear message when `per_device_train_batch_size * gradient_accumulation_steps` is not divisible by `num_generations`, with a unit test.
+
+You are approved for one more H100 workload. Do not retrain SFT. Reuse `.../runs/sft/adapters/full_v2/`, the dynamic-sampling prompt set from the last run (891 prompts; regenerate only if it was not saved), and sampling setting (b) T=0.7/top-p 0.8/top-k 20 for the rollouts:
+1. 10-step GRPO probe (Unsloth first, plain TRL fallback). Report reward, `frac_reward_zero_std`, clipped ratio, step time, memory, and which path worked.
+2. Matched compute, 40 accelerator minutes per arm from SFT-full v2: Arm A continued SFT (full train, LR 5e-5); Arm B GRPO on the filtered prompts.
+3. Dev evals (961 rows, temperature 0) for Arm A and Arm B, with distinct run names. SFT-full v2 is already evaluated (0.7817).
+4. Base-vs-tuned rollout check on Arm B to confirm the LoRA weights were used in generation.
+Same rules as before. If a browser login is requested, stop and say so. Then finish the RL experiment section of `strategy_decision.md` with the matched-compute table and a plain conclusion compared with the SFT noise level (SFT 2,000 vs SFT full gap is 0.008), pick the final candidate by dev score, and reply with the tables, GRPO path, run ids and links.
