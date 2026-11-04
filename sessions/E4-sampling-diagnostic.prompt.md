@@ -1,0 +1,10 @@
+Project lead review of the RL gate: the SFT signals look like a sampling artifact, not a real lack of signal. SFT-full is 99% valid with greedy decoding but 0.4% valid at temperature 1.0 with no top-p or top-k, while the base model is 76% valid under the same sampling. A likely cause is a fragile end of turn: greedy decoding stops after the JSON, but full-vocabulary sampling keeps generating, and the trailing text makes the output invalid. TRL GRPO also samples at temperature 1.0 by default, so GRPO would have hit the same problem.
+
+I added `--temperature`, `--top-p`, `--top-k` and `--keep-samples` to `signals.py`; it now saves sample texts in its JSON output. Tests pass.
+
+You are approved for one more H100 workload that runs, in order:
+1. Diagnostic signals on SFT-full (64-row dev subset, 8 samples) at three settings: (a) T=1.0, top-p 1.0, top-k -1; (b) Qwen's recommended sampling for Qwen3-4B-Instruct-2507, T=0.7, top-p 0.8, top-k 20; (c) T=1.0 with top-p 0.95. Save texts. In the results, classify why invalid samples are invalid (trailing text after the JSON, reasoning block with content, broken JSON, non-verbatim span, other) with counts.
+2. Gate per setting: zero-std fraction at most 0.6 and valid rate at least 0.5. Pick the first setting that passes, in the order (b), (c), (a).
+3. If one passes, continue with the original session E steps 3 to 6 (dynamic-sampling prompt set, 10-step GRPO probe, 40-minute matched-compute arms for continued SFT and GRPO, dev evals of SFT-full, Arm A and Arm B). Use the same sampling setting for the GRPO rollouts (GRPOConfig `temperature`, `top_p`, `top_k`) and for the prompt filter. Keep the Unsloth to plain-TRL fallback rule.
+4. If none passes, stop after step 1 and report the classification.
+Same rules as before: dry-run, idempotency key, `max_retries: 0`, short log snapshots only, do not touch test, never cancel runs you did not start. Then update `strategy_decision.md` (RL experiment section) and reply with the diagnostic table, the gate result, the RL table if it ran, the final candidate, run ids and links.

@@ -17,6 +17,10 @@ def main() -> None:
     parser.add_argument("--subset-size", type=int, default=64)
     parser.add_argument("--samples", type=int, default=8)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--temperature", type=float, default=1.0)
+    parser.add_argument("--top-p", type=float, default=1.0)
+    parser.add_argument("--top-k", type=int, default=-1)
+    parser.add_argument("--keep-samples", type=int, default=2, help="sample texts saved per prompt for inspection")
     parser.add_argument("--output")
     parser.add_argument("--tag", action="append", default=[])
     args = parser.parse_args()
@@ -28,9 +32,10 @@ def main() -> None:
     prompts = [adapter.prompt_messages(row["input_text"]) for row in rows]
     engine = LLM(model=args.model, enable_lora=args.adapter is not None, max_lora_rank=64)
     request = LoRARequest("task-adapter", 1, args.adapter) if args.adapter else None
-    outputs = engine.chat(prompts, SamplingParams(n=args.samples, temperature=1.0, max_tokens=512, seed=args.seed), lora_request=request)
-    reward_groups, all_metrics = [], []
+    outputs = engine.chat(prompts, SamplingParams(n=args.samples, temperature=args.temperature, top_p=args.top_p, top_k=args.top_k, max_tokens=512, seed=args.seed), lora_request=request)
+    reward_groups, all_metrics, samples = [], [], []
     for row, output in zip(rows, outputs):
+        samples.append([item.text for item in output.outputs[:args.keep_samples]])
         group = [extraction_metrics(item.text, row["gold"], row["input_text"]) for item in output.outputs]
         reward_groups.append([item["strict_event_f1"] for item in group])
         all_metrics.extend(group)
@@ -40,7 +45,9 @@ def main() -> None:
         "mean_within_prompt_reward_std": statistics.mean(statistics.pstdev(group) for group in reward_groups),
         "fraction_zero_reward_std": statistics.mean(statistics.pstdev(group) == 0 for group in reward_groups),
         "empty_output_rate": statistics.mean(item["empty_output"] for item in all_metrics),
+        "sampling": {"temperature": args.temperature, "top_p": args.top_p, "top_k": args.top_k},
         "reward_groups": reward_groups,
+        "samples": samples,
     }
     tags = dict(tag.split("=", 1) for tag in args.tag)
     with mlflow.start_run():
