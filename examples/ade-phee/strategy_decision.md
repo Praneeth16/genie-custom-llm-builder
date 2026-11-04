@@ -90,8 +90,8 @@ AI Runtime run `520951822433666` retrained SFT full after forcing the upstream Q
 | Model | Dev strict F1 | Valid rate | PHEE EM | Token F1 | Precision | Recall | Reasoning-prefix rate | Accelerator minutes |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | SFT full v2 | 0.7817 | 0.9896 | 0.6703 | 0.7882 | 0.7859 | 0.7828 | 0.0000 | 19.26 train + 2.75 eval |
-| Arm A: continued SFT | — | — | — | — | — | — | — | Not run (probe failure) |
-| Arm B: GRPO | — | — | — | — | — | — | — | Not run (probe failure) |
+| Arm A: continued SFT | 0.7662 | 0.9854 | 0.6539 | 0.7724 | 0.7729 | 0.7653 | 0.0000 | 40.16 train + 2.53 eval |
+| Arm B: GRPO | 0.7818 | 0.9886 | 0.6712 | 0.7881 | 0.7852 | 0.7838 | 0.0000 | 40.29 train + 1.71 eval |
 
 | Setting | Temperature | Top-p | Top-k | Valid rate | Mean reward | Mean reward std | Zero-std fraction | Corrupt preamble | Broken JSON | Non-verbatim | Gate |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
@@ -100,6 +100,8 @@ AI Runtime run `520951822433666` retrained SFT full after forcing the upstream Q
 
 Setting (b) passed first and was selected. Dynamic sampling retained 891 of 2,898 training prompts (30.75%). The template fix eliminated the corrupted-special-token preamble and restored both validity and within-prompt reward variance.
 
-The 10-step probe did not start training. Both the Unsloth path and required plain-TRL fallback failed during `GRPOConfig` validation because `generation_batch_size=4` was not divisible by eight generations. Consequently, neither 40-minute arm nor their final evaluations ran, and no matched-compute GRPO conclusion is available. The local workload configuration now uses eight accumulation steps so the generation batch is divisible by eight, but no additional workload was submitted.
+Run `528364182692010` reused the 891-prompt filter and used a generation batch of 32 (`per_device_train_batch_size=8`, four accumulation steps, eight generations). The Unsloth 10-step probe passed without fallback: reward 0.8838, `frac_reward_zero_std` 0.15, clipped ratio 0, 13.16 seconds mean step time (7.40 seconds for the final steady-state step), and 87.80% peak H100 memory.
 
-By completed dev score only, the final candidate for the untouched test split is SFT full v2 at `/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/sft/adapters/full_v2/` with 0.7817 strict event F1.
+At matched compute, GRPO beat continued SFT by 0.0156 dev strict F1. This is larger than the 0.0080 gap between SFT 2,000 and the original SFT full checkpoint. However, continued SFT regressed by 0.0155 from the SFT-full-v2 starting point, while GRPO improved over that starting point by only 0.00008, far below the noise reference. The honest conclusion is that GRPO protected quality relative to an over-trained SFT control, not that it produced a meaningful improvement over SFT full v2.
+
+The base-versus-tuned rollout check passed: sample texts and reward groups differed, with mean reward 0.7881 for Arm B versus 0.2218 for base, confirming that generation used the GRPO LoRA weights. By dev score only, the final candidate for the untouched test split is Arm B at `/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/rl/adapters/grpo/` with 0.7818 strict event F1.

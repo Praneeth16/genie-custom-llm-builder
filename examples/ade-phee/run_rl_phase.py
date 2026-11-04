@@ -166,7 +166,7 @@ def probe_passes(report: dict) -> bool:
     metrics = report.get("trainer_metrics", {})
     reward_values = [value for key, value in metrics.items() if key == "reward" or key.endswith("/reward") or "rewards/" in key]
     zero_std = [value for key, value in metrics.items() if "frac_reward_zero_std" in key]
-    clipped = [value for key, value in metrics.items() if "clipped" in key and "ratio" in key]
+    clipped = [value for key, value in metrics.items() if "clip" in key and "ratio" in key]
     report["probe_checks"] = {
         "reward_nonzero": any(value != 0 for value in reward_values),
         "frac_reward_zero_std": zero_std[-1] if zero_std else None,
@@ -180,36 +180,16 @@ def probe_passes(report: dict) -> bool:
 def main() -> None:
     ROOT.mkdir(parents=True, exist_ok=True)
     install()
-    run("train_full_v2", [
-        sys.executable, str(SCRIPTS / "train_sft.py"), "--train-dataset", str(TRAIN),
-        "--dev-dataset", str(DEV), "--output", str(SFT), "--epochs", "3",
-        "--learning-rate", "2e-4", "--seed", "42", "--lora-rank", "32",
-        "--step-name", "train_full_v2", "--phase", "rl",
-        "--result-output", str(ROOT / "train_full_v2.json"),
-    ])
-    evaluate("sft_full_v2", SFT)
-    settings = {
-        "a": {"temperature": 1.0, "top_p": 1.0, "top_k": -1},
-        "b": {"temperature": 0.7, "top_p": 0.8, "top_k": 20},
-    }
-    diagnostics = {}
-    for key in ("b", "a"):
-        report = signals(f"diagnostic_v2_{key}", SFT, settings[key])
-        report["invalid_classification"] = classify_invalid(report)
-        report["gate_passes"] = report["fraction_zero_reward_std"] <= 0.6 and report["valid_format_rate"] >= 0.5
-        write(f"diagnostic_v2_{key}", report)
-        diagnostics[key] = report
-    selected = next((key for key in ("b", "a") if diagnostics[key]["gate_passes"]), None)
-    comparison = {
-        "step": "sampling_gate_v2", "status": "passed" if selected else "failed",
-        "selected_setting": selected, "selection_order": ["b", "a"],
-        "settings": {key: {"sampling": settings[key], "valid_format_rate": diagnostics[key]["valid_format_rate"], "fraction_zero_reward_std": diagnostics[key]["fraction_zero_reward_std"], "gate_passes": diagnostics[key]["gate_passes"]} for key in settings},
-    }
-    write("sampling_gate_v2", comparison)
-    if selected is None:
-        return
-    sampling = settings[selected]
-    sampled = dynamic_prompts(sampling)
+    sampling = {"temperature": 0.7, "top_p": 0.8, "top_k": 20}
+    dataset_path = ROOT / "datasets/rl_prompts.jsonl"
+    if dataset_path.exists():
+        surviving = sum(1 for line in dataset_path.read_text().splitlines() if line.strip())
+        if surviving != 891:
+            raise RuntimeError(f"saved dynamic prompt set has {surviving} rows, expected 891")
+        sampled = {"step": "dynamic_sampling_reuse", "status": "completed", "sampling": sampling, "surviving_prompts": surviving, "regenerated": False}
+        write("dynamic_sampling_reuse", sampled)
+    else:
+        sampled = dynamic_prompts(sampling)
     if not sampled["surviving_prompts"]:
         raise RuntimeError("dynamic sampling retained no prompts")
     common = [
@@ -233,6 +213,18 @@ def main() -> None:
     run("grpo", [sys.executable, str(EXAMPLE / "train_grpo_arm.py"), *common, "--output", str(ROOT / "adapters/grpo"), "--result-output", str(ROOT / "grpo.json"), "--path", path, "--minutes", "40"])
     evaluate("sft_plus", ROOT / "adapters/sft_plus")
     evaluate("grpo", ROOT / "adapters/grpo")
+    tuned = signals("rollout_grpo", ROOT / "adapters/grpo", sampling)
+    base = signals("rollout_base", None, sampling)
+    rollout_check = {
+        "step": "base_vs_tuned_rollout_check", "status": "passed" if tuned["samples"] != base["samples"] else "failed",
+        "sample_texts_differ": tuned["samples"] != base["samples"],
+        "reward_groups_differ": tuned["reward_groups"] != base["reward_groups"],
+        "tuned_mean_reward": tuned["mean_reward"], "base_mean_reward": base["mean_reward"],
+        "tuned_mlflow_run_id": tuned["mlflow_run_id"], "base_mlflow_run_id": base["mlflow_run_id"],
+    }
+    write("base_vs_tuned_rollout_check", rollout_check)
+    if rollout_check["status"] != "passed":
+        raise RuntimeError("GRPO adapter rollout texts are identical to base rollouts")
 
 
 if __name__ == "__main__":

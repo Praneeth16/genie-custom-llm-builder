@@ -27,11 +27,11 @@ def main() -> None:
     from chat_template import use_reference_chat_template
 
     class TimeLimit(TrainerCallback):
-        def __init__(self) -> None:
-            self.started = time.perf_counter()
+        def __init__(self, deadline: float) -> None:
+            self.deadline = deadline
 
         def on_step_end(self, _args, _state, control, **_kwargs):
-            if time.perf_counter() - self.started >= args.minutes * 60:
+            if time.perf_counter() >= self.deadline:
                 control.should_training_stop = True
 
     started = time.perf_counter()
@@ -47,7 +47,7 @@ def main() -> None:
         )
         with mlflow.start_run():
             with mlflow.start_run(nested=True, run_name="sft_plus", tags={"phase": "rl", "step": "sft_plus"}) as run:
-                trainer = SFTTrainer(model=model, processing_class=tokenizer, train_dataset=data, args=config, callbacks=[TimeLimit()])
+                trainer = SFTTrainer(model=model, processing_class=tokenizer, train_dataset=data, args=config, callbacks=[TimeLimit(started + args.minutes * 60)])
                 result = trainer.train()
                 model.save_pretrained(args.output)
                 tokenizer.save_pretrained(args.output)

@@ -33,6 +33,7 @@ def main() -> None:
     from trl import GRPOConfig, GRPOTrainer
     from chat_template import use_reference_chat_template
     from rewards import gated_extraction_reward
+    from train_grpo import validate_generation_batch_size
 
     class Monitor(TrainerCallback):
         def __init__(self) -> None:
@@ -63,6 +64,7 @@ def main() -> None:
     report = {"step": "grpo_probe" if args.max_steps > 0 else "grpo", "status": "failed", "path": args.path, "budget_minutes": args.minutes}
     monitor = Monitor()
     try:
+        validate_generation_batch_size(8, 4, 8)
         if args.path == "unsloth":
             from unsloth import FastLanguageModel
             model, tokenizer = FastLanguageModel.from_pretrained(args.adapter, max_seq_length=2048, fast_inference=True)
@@ -78,8 +80,8 @@ def main() -> None:
             output_dir=f"/tmp/{report['step']}_{args.path}", max_steps=args.max_steps,
             num_train_epochs=1000, learning_rate=5e-6, seed=42, report_to="mlflow",
             loss_type="dapo", beta=0.0, epsilon=0.2, epsilon_high=0.28,
-            num_generations=8, max_completion_length=256, per_device_train_batch_size=1,
-            gradient_accumulation_steps=8, use_vllm=True, vllm_mode="colocate",
+            num_generations=8, max_completion_length=256, per_device_train_batch_size=8,
+            gradient_accumulation_steps=4, use_vllm=True, vllm_mode="colocate",
             temperature=args.temperature, top_p=args.top_p, top_k=args.top_k,
         )
         run_name = f"{report['step']}_{args.path}"
