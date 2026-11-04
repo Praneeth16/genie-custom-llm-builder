@@ -1,6 +1,6 @@
 experiment_name: ade_phee_rl_phase
 mlflow_experiment_directory: /Workspace/Shared/custom_llm
-mlflow_run_name: ade_phee_rl_matched_compute
+mlflow_run_name: ade_phee_rl_sampling_recovery
 compute: {accelerator_type: GPU_1xH100, num_accelerators: 1}
 environment:
   version: databricks_ai_v6

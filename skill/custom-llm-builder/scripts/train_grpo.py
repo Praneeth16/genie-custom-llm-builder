@@ -25,9 +25,11 @@ def main() -> None:
     from trl import GRPOConfig, GRPOTrainer
     from unsloth import FastLanguageModel
     from rewards import gated_extraction_reward
+    from chat_template import use_reference_chat_template
     from training_callback import build_probe_callback
 
     model, tokenizer = FastLanguageModel.from_pretrained(args.init_adapter or args.base_model, max_seq_length=2048, fast_inference=True)
+    use_reference_chat_template(tokenizer, args.base_model)
     if not args.init_adapter:
         model = FastLanguageModel.get_peft_model(model, r=16, lora_alpha=32, target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"], use_gradient_checkpointing="unsloth")
     dataset = load_dataset("json", data_files=args.dataset, split="train")

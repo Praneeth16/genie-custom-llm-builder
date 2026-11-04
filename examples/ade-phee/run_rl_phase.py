@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import os
+import re
 import statistics
 import subprocess
 import sys
@@ -63,14 +64,63 @@ def install() -> None:
         write("install_pins", report)
 
 
-def signals(name: str, adapter: Path | None) -> dict:
-    command = [sys.executable, str(SCRIPTS / "signals.py"), "--model", MODEL, "--dev-dataset", str(DEV), "--subset-size", "64", "--samples", "8", "--seed", "42", "--output", str(ROOT / f"{name}.json"), "--tag", "phase=rl", "--tag", f"step={name}"]
+def signals(name: str, adapter: Path | None, sampling: dict) -> dict:
+    command = [
+        sys.executable, str(SCRIPTS / "signals.py"), "--model", MODEL,
+        "--dev-dataset", str(DEV), "--subset-size", "64", "--samples", "8",
+        "--seed", "42", "--temperature", str(sampling["temperature"]),
+        "--top-p", str(sampling["top_p"]), "--top-k", str(sampling["top_k"]),
+        "--keep-samples", "8", "--output", str(ROOT / f"{name}.json"),
+        "--tag", "phase=rl", "--tag", f"step={name}",
+    ]
     if adapter:
         command += ["--adapter", str(adapter)]
     return run(name, command)
 
 
-def dynamic_prompts() -> dict:
+def classify_invalid(report: dict) -> dict[str, int]:
+    from metrics import EVENT_KEYS, LIST_FIELDS, extraction_metrics, is_valid_document
+    rows = [json.loads(line) for line in DEV.read_text().splitlines() if line.strip()][:64]
+    counts = {"trailing_text_after_json": 0, "reasoning_block_with_content": 0, "broken_json": 0, "non_verbatim_span": 0, "other": 0}
+    prefix = re.compile(r"^\s*<think>(.*?)</think>\s*", re.DOTALL)
+    decoder = json.JSONDecoder()
+    for row, samples in zip(rows, report["samples"]):
+        for sample in samples:
+            if extraction_metrics(sample, row["gold"], row["input_text"])["valid_format"]:
+                continue
+            match = prefix.match(sample)
+            if match and match.group(1).strip():
+                counts["reasoning_block_with_content"] += 1
+                continue
+            answer = prefix.sub("", sample, count=1)
+            try:
+                document, end = decoder.raw_decode(answer.lstrip())
+            except json.JSONDecodeError:
+                counts["broken_json"] += 1
+                continue
+            if answer.lstrip()[end:].strip():
+                counts["trailing_text_after_json"] += 1
+                continue
+            schema_shape = isinstance(document, dict) and set(document) == {"events"} and isinstance(document["events"], list) and all(
+                isinstance(event, dict) and set(event) == EVENT_KEYS and
+                isinstance(event.get("trigger"), str) and
+                all(isinstance(event.get(field), list) for field in LIST_FIELDS)
+                for event in document["events"]
+            )
+            if schema_shape:
+                spans = [event["trigger"] for event in document["events"]] + [
+                    span for event in document["events"] for field in LIST_FIELDS
+                    for span in event[field] if isinstance(span, str)
+                ]
+                if any(span not in row["input_text"] for span in spans):
+                    counts["non_verbatim_span"] += 1
+                    continue
+            if not is_valid_document(document, row["input_text"]):
+                counts["other"] += 1
+    return counts
+
+
+def dynamic_prompts(sampling: dict) -> dict:
     from metrics import extraction_metrics
     from vllm import LLM, SamplingParams
     from vllm.lora.request import LoRARequest
@@ -81,7 +131,11 @@ def dynamic_prompts() -> dict:
     batch_size = 128
     for offset in range(0, len(rows), batch_size):
         batch = rows[offset:offset + batch_size]
-        outputs = engine.chat([row["prompt"] for row in batch], SamplingParams(n=8, temperature=1.0, max_tokens=256, seed=42), lora_request=request)
+        outputs = engine.chat(
+            [row["prompt"] for row in batch],
+            SamplingParams(n=8, temperature=sampling["temperature"], top_p=sampling["top_p"], top_k=sampling["top_k"], max_tokens=256, seed=42),
+            lora_request=request,
+        )
         for row, output in zip(batch, outputs):
             rewards = [extraction_metrics(item.text, row["gold"], row["input_text"])["strict_event_f1"] for item in output.outputs]
             if statistics.pstdev(rewards) > 0:
@@ -89,7 +143,7 @@ def dynamic_prompts() -> dict:
     destination = ROOT / "datasets/rl_prompts.jsonl"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text("\n".join(json.dumps(row) for row in kept) + "\n")
-    report = {"step": "dynamic_sampling", "status": "completed", "train_prompts": len(rows), "surviving_prompts": len(kept), "survival_rate": len(kept) / len(rows)}
+    report = {"step": "dynamic_sampling", "status": "completed", "sampling": sampling, "train_prompts": len(rows), "surviving_prompts": len(kept), "survival_rate": len(kept) / len(rows)}
     write("dynamic_sampling", report)
     return report
 
@@ -116,21 +170,37 @@ def probe_passes(report: dict) -> bool:
 def main() -> None:
     ROOT.mkdir(parents=True, exist_ok=True)
     install()
-    tuned = signals("signals_sft_full", SFT)
-    base = signals("signals_base", None)
-    differs = tuned["reward_groups"] != base["reward_groups"]
-    gate = tuned["fraction_zero_reward_std"] <= 0.6 and differs
-    comparison = {"step": "gate", "status": "passed" if gate else "failed", "fraction_zero_reward_std": tuned["fraction_zero_reward_std"], "tuned_rollouts_differ_from_base": differs, "tuned_mean_reward": tuned["mean_reward"], "base_mean_reward": base["mean_reward"]}
-    write("gate", comparison)
-    if not gate:
-        comparison["recommended_alternative"] = "Continue supervised fine-tuning or use off-policy Claude distillation; GRPO lacks within-prompt reward variance."
-        write("gate", comparison)
-        evaluate("sft_full", SFT)
+    settings = {
+        "a": {"temperature": 1.0, "top_p": 1.0, "top_k": -1},
+        "b": {"temperature": 0.7, "top_p": 0.8, "top_k": 20},
+        "c": {"temperature": 1.0, "top_p": 0.95, "top_k": -1},
+    }
+    diagnostics = {}
+    for key in ("a", "b", "c"):
+        report = signals(f"diagnostic_{key}", SFT, settings[key])
+        report["invalid_classification"] = classify_invalid(report)
+        report["gate_passes"] = report["fraction_zero_reward_std"] <= 0.6 and report["valid_format_rate"] >= 0.5
+        write(f"diagnostic_{key}", report)
+        diagnostics[key] = report
+    selected = next((key for key in ("b", "c", "a") if diagnostics[key]["gate_passes"]), None)
+    comparison = {
+        "step": "sampling_gate", "status": "passed" if selected else "failed",
+        "selected_setting": selected, "selection_order": ["b", "c", "a"],
+        "settings": {key: {"sampling": settings[key], "valid_format_rate": diagnostics[key]["valid_format_rate"], "fraction_zero_reward_std": diagnostics[key]["fraction_zero_reward_std"], "gate_passes": diagnostics[key]["gate_passes"]} for key in settings},
+    }
+    write("sampling_gate", comparison)
+    if selected is None:
         return
-    sampled = dynamic_prompts()
+    sampling = settings[selected]
+    sampled = dynamic_prompts(sampling)
     if not sampled["surviving_prompts"]:
         raise RuntimeError("dynamic sampling retained no prompts")
-    common = ["--base-model", MODEL, "--adapter", str(SFT), "--dataset", str(ROOT / "datasets/rl_prompts.jsonl")]
+    common = [
+        "--base-model", MODEL, "--adapter", str(SFT),
+        "--dataset", str(ROOT / "datasets/rl_prompts.jsonl"),
+        "--temperature", str(sampling["temperature"]), "--top-p", str(sampling["top_p"]),
+        "--top-k", str(sampling["top_k"]),
+    ]
     probe_output = ROOT / "adapters/grpo_probe"
     probe = run("grpo_probe", [sys.executable, str(EXAMPLE / "train_grpo_arm.py"), *common, "--output", str(probe_output), "--result-output", str(ROOT / "grpo_probe.json"), "--path", "unsloth", "--max-steps", "10"], allow_failure=True)
     path = "unsloth"

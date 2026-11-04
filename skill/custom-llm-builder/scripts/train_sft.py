@@ -27,9 +27,11 @@ def main() -> None:
     from datasets import load_dataset
     from trl import SFTConfig, SFTTrainer
     from unsloth import FastLanguageModel
+    from chat_template import use_reference_chat_template
     from training_callback import build_probe_callback
 
     model, tokenizer = FastLanguageModel.from_pretrained(args.model, max_seq_length=2048, load_in_4bit=False)
+    use_reference_chat_template(tokenizer, args.model)
     model = FastLanguageModel.get_peft_model(model, r=args.lora_rank, lora_alpha=32, target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"], use_gradient_checkpointing="unsloth")
     data = load_dataset("json", data_files={"train": args.train_dataset, "dev": args.dev_dataset})
     config = SFTConfig(output_dir=f"/tmp/{args.step_name}", max_steps=args.max_steps, num_train_epochs=args.epochs, learning_rate=args.learning_rate, seed=args.seed, report_to="mlflow", completion_only_loss=True, eval_strategy="no", save_strategy="no")

@@ -68,3 +68,17 @@ The workload therefore skipped dynamic prompt sampling, the GRPO probe, both mat
 ### Conclusion
 
 GRPO did not demonstrate an improvement over continued SFT at matched compute because the prerequisite learning-signal gate failed and neither arm was run. The GRPO-minus-continued-SFT delta is therefore unavailable, and there is no evidence of a gain larger than the 0.0080 dev strict-F1 difference between SFT 2,000 (0.7734) and SFT full (0.7814). By dev score only, the final candidate for the untouched test split is the SFT-full adapter at `/Volumes/serverless_lakebase_praneeth_catalog/custom_llm/artifacts/runs/sft/adapters/full/`.
+
+### Sampling Diagnostic Follow-up
+
+AI Runtime run `81591482554133` tested whether the failed gate was caused by unconstrained sampling. Each setting generated eight samples for the same 64 development prompts and saved all 512 texts. An invalid sample was assigned to exactly one cause in this order: non-empty reasoning block, trailing text after a parseable JSON value, broken JSON, non-verbatim span, or other schema failure.
+
+| Setting | Temperature | Top-p | Top-k | Valid rate | Mean reward | Mean reward std | Zero-std fraction | Trailing text | Reasoning content | Broken JSON | Non-verbatim | Other | Gate |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| (a) Full vocabulary | 1.0 | 1.0 | -1 | 0.0039 | 0.0031 | 0.0082 | 0.96875 | 0 | 0 | 510 | 0 | 0 | Fail |
+| (b) Qwen recommended | 0.7 | 0.8 | 20 | 0.4121 | 0.3186 | 0.3703 | 0.015625 | 0 | 0 | 300 | 1 | 0 | Fail |
+| (c) Nucleus only | 1.0 | 0.95 | -1 | 0.0117 | 0.0088 | 0.0233 | 0.90625 | 0 | 0 | 506 | 0 | 0 | Fail |
+
+Setting (b) restored strong within-prompt reward variance but missed the required 0.5 valid-rate floor at 0.4121. Settings (c) and (a) failed both thresholds. The captured samples therefore do not support the trailing-text hypothesis: failures were overwhelmingly unparseable responses, often arbitrary leading content around an otherwise plausible answer, rather than text appended after a parseable JSON document.
+
+No setting passed both zero-std fraction at most 0.6 and valid rate at least 0.5, so the workload correctly stopped before dynamic sampling, the GRPO probe, and both 40-minute arms. No GRPO implementation path was used and no matched-compute RL table exists. The final candidate remains SFT full by dev score only; the test split remains untouched.

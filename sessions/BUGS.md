@@ -28,3 +28,8 @@ Genie Code CLI 0.3.0 (macOS arm64), model provider Unity Gateway, workspace `fe-
 ## 6. FMAPI Claude chat responses sometimes return `content` as a list of blocks instead of a string
 - What happens: through the OpenAI-compatible chat API (`mlflow.deployments` client, endpoint `databricks-claude-sonnet-5-5`, no thinking requested), some responses carry `choices[0].message.content` as `[{"type": "reasoning", "summary": [...]}, {"type": "text", "text": "..."}]`. Seen on 68 of 961 zero-shot and 16 of 961 five-shot requests. Clients that expect a string (most OpenAI-compatible code) silently break; our first scoring counted these as invalid and under-scored Claude by 0.03 F1 zero-shot.
 - Expected: a string `content` on the OpenAI-compatible route unless the caller asks for content blocks, or documented behavior.
+
+## 7. (Upstream, Unsloth) `unsloth/Qwen3-4B-Instruct-2507` chat template injects an empty `<think></think>` block
+- Not a Genie bug, found during the build. `FastLanguageModel.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")` loads Unsloth's mirror, whose chat template renders assistant turns as `<think>\n\n</think>\n\n{answer}`. The upstream Qwen template (a non-thinking model) renders `{answer}` only.
+- Effect: LoRA SFT learns a special-token preamble. Greedy outputs look fine (and broke our strict JSON parser until we stripped the block), but at temperature 0.7 to 1.0 the preamble becomes `<tool_call>`, `</tool_call>` and mixed tokens, so 59% to 99.6% of samples are unparsable. Any GRPO run on such a model gets almost no valid rollouts.
+- Fix used: copy the upstream tokenizer's `chat_template` onto the Unsloth tokenizer and assert the rendering matches (`scripts/chat_template.py`).

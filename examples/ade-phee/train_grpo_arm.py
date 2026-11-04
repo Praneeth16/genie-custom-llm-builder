@@ -19,6 +19,9 @@ def main() -> None:
     parser.add_argument("--path", choices=("unsloth", "trl"), required=True)
     parser.add_argument("--max-steps", type=int, default=-1)
     parser.add_argument("--minutes", type=float, default=40)
+    parser.add_argument("--temperature", type=float, required=True)
+    parser.add_argument("--top-p", type=float, required=True)
+    parser.add_argument("--top-k", type=int, required=True)
     args = parser.parse_args()
 
     import mlflow
@@ -73,6 +76,7 @@ def main() -> None:
             loss_type="dapo", beta=0.0, epsilon=0.2, epsilon_high=0.28,
             num_generations=8, max_completion_length=256, per_device_train_batch_size=1,
             gradient_accumulation_steps=4, use_vllm=True, vllm_mode="colocate",
+            temperature=args.temperature, top_p=args.top_p, top_k=args.top_k,
         )
         run_name = f"{report['step']}_{args.path}"
         with mlflow.start_run():
