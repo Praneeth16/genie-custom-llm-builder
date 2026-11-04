@@ -7,3 +7,7 @@ runs/
 *.safetensors
 examples/*/data/*.jsonl
 !examples/*/data/sample*.jsonl
+sessions/*.jsonl
+examples/*/bundle/*/bundle/dist/
+.pytest_cache/
+generated_artifacts/

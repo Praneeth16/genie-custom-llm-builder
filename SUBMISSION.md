@@ -8,13 +8,13 @@
 
 I built a Genie Code skill, `custom-llm-builder`, that turns Genie into an AI engineer for small domain models. Given a task with a checkable metric, the skill makes Genie measure baselines first, compute signals that decide the training method (prompting, SFT, distillation, or RL), run the training on AI Runtime with TRL and Unsloth, compare methods at matched compute, and ship the winner to Unity Catalog with a batch scoring job.
 
-Genie then used the skill end to end on a real task: extracting adverse drug events from medical case reports (PHEE V2, MIT license). A 4B open model (Qwen3-4B-Instruct-2507) fine-tuned with LoRA reached 0.782 dev strict event F1, against 0.716 for Claude Sonnet 5.5 with 5 examples and 0.301 for the base model. It runs about 30 times faster. A matched-compute experiment showed GRPO on top of SFT gives no extra gain on this task (0.7818 vs 0.7817), while extra SFT overfits (0.766), so RL is the better use of spare compute but not needed. On the held-out test split, scored once after the final choice was frozen, the fine-tuned model scores 0.786 strict event F1 with 99.7% valid outputs, against 0.708 for Claude Sonnet 5.5 with 5 examples, 0.635 for Claude zero-shot and 0.304 for the base model. It runs at 79 sentences per second on one H100 against 2.8 for Claude.
+Genie then used the skill end to end on a real task: extracting adverse drug events from medical case reports (PHEE V2, MIT license). A 4B open model (Qwen3-4B-Instruct-2507) fine-tuned with LoRA reached 0.782 dev strict event F1, against 0.716 for Claude Sonnet 5.5 with 5 examples and 0.301 for the base model. It runs about 28 times faster. A matched-compute experiment showed GRPO on top of SFT gives no extra gain on this task (0.7818 vs 0.7817), while extra SFT overfits (0.766), so RL is the better use of spare compute but not needed. On the held-out test split, scored once after the final choice was frozen, the fine-tuned model scores 0.786 strict event F1 with 99.7% valid outputs, against 0.708 for Claude Sonnet 5.5 with 5 examples, 0.635 for Claude zero-shot and 0.304 for the base model. It runs at 79 sentences per second on one H100 against 2.8 for Claude.
 
 Along the way the build found and fixed problems that would have produced wrong conclusions: a schema that silently erased 18% of gold events, two scoring bugs, and an Unsloth chat-template bug that made sampled outputs unparsable and would have made RL look useless. Each fix went back into the skill as a rule or a guard.
 
 ## Links
 
-- Repo (local, not yet published): `02-assets/genie-custom-llm-builder/`
+- Repo: https://github.com/Praneeth16/genie-custom-llm-builder
 - Skill: `skill/custom-llm-builder/` (installed at `~/.genie/skills/custom-llm-builder`)
 - Strategy log with every decision and table: `examples/ade-phee/strategy_decision.md`
 - Model card: `examples/ade-phee/MODEL_CARD.md`
@@ -47,7 +47,7 @@ Dev matched-compute experiment, both arms 40 H100 minutes from the same SFT mode
 | E | `/goal`: sampling diagnosis, clean-template retrain, matched-compute GRPO vs SFT | `01a1a39f-f5ad-7d92-bd5c-237f85a6b6a3` |
 | F | Test scoring, UC registration, batch job, model card | `01a1a54c-c5f1-7fd3-baaa-97bbaa35eb34` |
 
-Raw JSONL event logs for every session are in `sessions/*.jsonl`, and the prompts given to Genie are in `sessions/*.prompt.md`. CLI sessions are stored locally only (see bug 4 in `sessions/BUGS.md`).
+The prompts given to Genie are in `sessions/*.prompt.md`, and Genie's final summary for each session is in `sessions/*.last.md`. The raw JSONL event logs are not in the public repo because they contain local CLI configuration output. They are available on request. CLI sessions are stored locally only (see bug 4 in `sessions/BUGS.md`).
 
 ## Claude Code vs Genie Code
 
