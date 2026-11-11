@@ -4,6 +4,7 @@ Writes to --output:
   latents.npy          (N, grid*grid, dim) float16 token latents, for the probe and predictor
   meta.npz             state, action (N, 2) in [0, 1] and episode (N,)
   embeddings.parquet   one mean-pooled embedding per frame, for the Delta table and Vector Search
+  encoder.json         the encoder repo and token grid, so registration serves the same encoder
 
     python train/embed.py --output runs/pusht --limit 64   # probe
 """
@@ -11,6 +12,7 @@ Writes to --output:
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import tempfile
 import time
@@ -79,7 +81,8 @@ def main() -> None:
         np.save(Path(scratch) / "latents.npy", latents)
         np.savez(Path(scratch) / "meta.npz", state=data["state"], action=data["action"], episode=data["episode"])
         table.to_parquet(Path(scratch) / "embeddings.parquet", index=False)
-        for name in ("latents.npy", "meta.npz", "embeddings.parquet"):
+        (Path(scratch) / "encoder.json").write_text(json.dumps({"repo": args.repo, "grid": args.grid}))
+        for name in ("latents.npy", "meta.npz", "embeddings.parquet", "encoder.json"):
             shutil.copy(Path(scratch) / name, output / name)
 
 

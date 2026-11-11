@@ -6,6 +6,25 @@ import torch
 from torch import nn
 
 
+class MeanProbe(nn.Module):
+    """A small MLP on the mean of the tokens: a non-linear readout without token positions."""
+
+    def __init__(self, dim: int, out_dim: int, width: int = 256):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(dim, width), nn.GELU(), nn.Linear(width, width), nn.GELU(), nn.Linear(width, out_dim)
+        )
+        self.register_buffer("mean", torch.zeros(dim))
+        self.register_buffer("std", torch.ones(dim))
+
+    def set_normalization(self, mean: torch.Tensor, std: torch.Tensor) -> None:
+        self.mean.copy_(mean)
+        self.std.copy_(std.clamp_min(1e-6))
+
+    def forward(self, tokens: torch.Tensor) -> torch.Tensor:
+        return self.net(((tokens - self.mean) / self.std).mean(1))
+
+
 class AttentiveProbe(nn.Module):
     """One learned query cross-attends over the tokens; a linear layer reads out the answer."""
 

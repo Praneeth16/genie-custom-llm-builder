@@ -52,7 +52,7 @@ def main() -> None:
     hits = client.vector_search_indexes.query_index(
         index_name=index, columns=columns, query_vector=[float(v) for v in row[5]], num_results=6
     )
-    for hit in hits.result.data_array[1:]:
+    for hit in [h for h in hits.result.data_array if int(h[0]) != args.frame][:5]:
         print(dict(zip([*columns, "score"], hit, strict=False)))
 
 

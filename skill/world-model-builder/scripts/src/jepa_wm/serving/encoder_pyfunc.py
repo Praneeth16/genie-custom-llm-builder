@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import base64
 import io
+import json
+from pathlib import Path
 
 import mlflow
 import numpy as np
@@ -25,7 +27,8 @@ class FrameEncoderModel(mlflow.pyfunc.PythonModel):
         from jepa_wm.probe import AttentiveProbe
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.encoder = FrameEncoder(context.artifacts["encoder"]).to(self.device)
+        grid = json.loads(Path(context.artifacts["config"]).read_text())["grid"]
+        self.encoder = FrameEncoder(context.artifacts["encoder"], grid).to(self.device)
         self.probe = AttentiveProbe(self.encoder.dim, 2).to(self.device)
         self.probe.load_state_dict(torch.load(context.artifacts["probe"], map_location=self.device))
         self.probe.eval()
@@ -35,7 +38,8 @@ class FrameEncoderModel(mlflow.pyfunc.PythonModel):
 
         frames = [np.asarray(Image.open(io.BytesIO(base64.b64decode(b))).convert("RGB")) for b in model_input["image"]]
         with torch.no_grad():
-            latents = self.encoder(torch.from_numpy(np.stack(frames)).to(self.device))
+            # One frame at a time, so a request may mix image sizes. The encoder resizes each.
+            latents = torch.cat([self.encoder(torch.from_numpy(f).unsqueeze(0).to(self.device)) for f in frames])
             position = self.probe(latents).cpu().numpy()
         return pd.DataFrame(
             {

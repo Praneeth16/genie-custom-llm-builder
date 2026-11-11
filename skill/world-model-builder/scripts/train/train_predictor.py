@@ -134,8 +134,11 @@ def main() -> None:
                     # 1 and 2: rollout error and decoded position, by horizon
                     starts = starts_for(split, max(HORIZONS))
                     sums = {}
-                    for chunk in starts.split(256):
+                    # For the wrong-action control, pair every start with one half a split away.
+                    partners = starts.roll(len(starts) // 2)
+                    for chunk, partner in zip(starts.split(256), partners.split(256), strict=True):
                         past, actions, future = window(chunk, max(HORIZONS))
+                        wrong_actions = window(partner, max(HORIZONS))[1]
                         imagined = predictor.rollout(past, actions)
                         unchanged = past[:, -1:].expand_as(future)
                         for h in HORIZONS:
@@ -143,10 +146,13 @@ def main() -> None:
                                 f"h{h}_latent_mse_model": F.mse_loss(imagined[:, h - 1], future[:, h - 1]),
                                 f"h{h}_latent_mse_no_change": F.mse_loss(unchanged[:, h - 1], future[:, h - 1]),
                             }
+                            truth = state[chunk + h]
+                            # No model at all: an action is a target position, so guess that the
+                            # agent is where the last action told it to go.
+                            target_error = (action[chunk + h - 1] - truth).norm(dim=1).mean()
+                            rows[f"h{h}_position_error_px_action_target"] = target_error * pusht.POSITION_SCALE
                             if probe:
-                                truth = state[chunk + h]
-                                # Neighbouring rows are neighbouring frames, so swap with rows far away.
-                                shuffled = predictor.rollout(past, actions.roll(len(chunk) // 2, dims=0))
+                                shuffled = predictor.rollout(past, wrong_actions)
                                 for name, guess in (
                                     ("model", imagined),
                                     ("no_change", unchanged),

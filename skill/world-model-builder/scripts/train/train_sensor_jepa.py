@@ -8,6 +8,7 @@ settings and the F1 threshold. Test is only scored with `--score-test`, once the
 frozen. No checkpoint selection: the last step is the one kept.
 
     python train/train_sensor_jepa.py --output runs/sensor --max-steps 30   # probe
+    python train/train_sensor_jepa.py --output runs/control --max-steps 0   # untrained networks
 """
 
 from __future__ import annotations
@@ -79,6 +80,8 @@ def model_scores(model, device, method: str, x: np.ndarray, batch: int = 1024) -
 
 
 def train(model, x: torch.Tensor, args, device, log) -> dict:
+    if args.max_steps == 0:  # the untrained-network control
+        return {}
     model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.05)
     schedule = torch.optim.lr_scheduler.OneCycleLR(optimizer, args.lr, total_steps=args.max_steps, pct_start=0.1)
@@ -135,7 +138,8 @@ def main() -> None:
     splits = {
         family: {
             name: windows(*generate(100_000, args.channels, 0.05, family, seed=args.seed + offset), args.window)
-            for name, offset in (("dev", 1), ("test", 2))
+            # Offsets keep train, dev and test disjoint for every --seed a multi-seed run uses.
+            for name, offset in (("dev", 1000), ("test", 2000))
         }
         for family in ANOMALY_KINDS
     }
@@ -149,7 +153,7 @@ def main() -> None:
                     report = evaluate(gaussian_scorer(train_x[::4]), splits, args.score_test)
                 elif name == "isolation_forest":
                     forest = IsolationForest(n_estimators=200, random_state=args.seed)
-                    forest.fit(train_x[::8].flatten(1).numpy())
+                    forest.fit(train_x[::4].flatten(1).numpy())
                     report = evaluate(partial(forest_scores, forest), splits, args.score_test)
                 else:
                     model = SensorMaskedModel(args.channels, args.window, target=METHODS[name]).to(device)

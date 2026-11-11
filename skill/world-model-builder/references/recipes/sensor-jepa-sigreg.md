@@ -29,10 +29,11 @@ On synthetic telemetry, over three seeds, the test AUROC for local and dynamics 
 
 | Method | Local | Dynamics |
 |---|---|---|
-| Gaussian on raw patches, no network | 0.952 | 0.982 |
-| Sensor JEPA, density score | 0.908 | 0.972 |
-| Masked reconstruction, density score | 0.869 | 0.961 |
-| Sensor JEPA, prediction error | 0.675 | 0.717 |
-| Isolation forest | 0.550 | 0.611 |
+| Gaussian on raw patches, no network | 0.955 | 0.981 |
+| Untrained network, density score | 0.933 | 0.979 |
+| Sensor JEPA, density score | 0.897 | 0.968 |
+| Masked reconstruction, density score | 0.868 | 0.955 |
+| Sensor JEPA, prediction error | 0.661 | 0.718 |
+| Isolation forest | 0.553 | 0.610 |
 
-The Gaussian with no network was best. The JEPA's latents were better than the reconstruction model's latents. This data is close to linear, so a Gaussian fits it well. The order can change on data with several operating modes, which is why you run the comparison on the user's data. If the Gaussian wins there too, ship the Gaussian for detection and use the JEPA only where an embedding is needed.
+The Gaussian with no network was best. The network with random weights was second, so training lowered the density score. The JEPA's latents were better than the reconstruction model's latents. This data is close to linear, so a Gaussian fits it well. The order can change on data with several operating modes, which is why you run the comparison on the user's data. If the Gaussian wins there too, ship the Gaussian for detection and use the JEPA only where an embedding is needed.

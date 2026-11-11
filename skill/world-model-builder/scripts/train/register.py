@@ -17,7 +17,6 @@ import pandas as pd
 from mlflow.models import infer_signature
 
 import jepa_wm
-from jepa_wm.encoders import DEFAULT_REPO
 from jepa_wm.tracking import child_run
 
 PACKAGE = str(Path(jepa_wm.__file__).parent)
@@ -81,7 +80,10 @@ def main() -> None:
             from jepa_wm.serving.encoder_pyfunc import FrameEncoderModel
 
             # The weights go into this workspace's registry only; they are never committed.
-            encoder = snapshot_download(DEFAULT_REPO, local_dir=Path(scratch) / "encoder")
+            used = json.loads((artifacts / "pusht/encoder.json").read_text())
+            encoder = snapshot_download(used["repo"], local_dir=Path(scratch) / "encoder")
+            grid = Path(scratch) / "grid.json"
+            grid.write_text(json.dumps({"grid": used["grid"]}))
             pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg=="
             example = pd.DataFrame({"image": [pixel]})
             output = pd.DataFrame(
@@ -94,7 +96,7 @@ def main() -> None:
             versions["vjepa2_encoder"] = register(
                 f"{args.schema}.vjepa2_encoder",
                 FrameEncoderModel(),
-                {"encoder": encoder, "probe": str(artifacts / "pusht/probe/probe.pt")},
+                {"encoder": encoder, "config": str(grid), "probe": str(artifacts / "pusht/probe/probe.pt")},
                 example,
                 output,
                 pins("mlflow", "torch", "transformers", "numpy", "pandas", "pillow"),

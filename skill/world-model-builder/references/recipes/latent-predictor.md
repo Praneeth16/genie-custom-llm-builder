@@ -18,5 +18,6 @@ Train a small transformer that takes the latents of the last frames and an actio
 ## Checks
 
 - **No change.** The predictor must beat repeating the last latents at every horizon.
+- **What the action already states.** If the action names the quantity you decode, e.g., a target position, use it as a baseline. In the reference build the predictor's test error for the agent's position was 13.3 px one step ahead and 22.6 px eight steps ahead. The guess "the agent is where the last action sent it" had 14.8 px and 14.2 px. The predictor won only one step ahead. Test a world model on something the action does not state, e.g., the pose of an object the agent pushes.
 - **Distant actions.** Roll out with actions taken from rows far away in the batch. The decoded error should rise sharply. If it does not, the predictor is not using the actions.
 - **Planning.** `src/jepa_wm/planning.py` searches for actions with the cross-entropy method. Compare the plan with random actions, the mean action, and holding position. In the reference build the planner lost to holding position, and a larger search was worse. Over four steps the goal frame differed little from the current frame, and the search found action sequences that exploited the predictor's errors. Do not present planning as working until it is tested in a simulator or on the real system.
