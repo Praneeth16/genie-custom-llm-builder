@@ -1,0 +1,21 @@
+# Train (or with --eval-only, re-evaluate) the latent predictor and planner on cached latents.
+# Needs embed.yaml and world_model.yaml to have run, for the latents and the position probe.
+experiment_name: jepa_wm_pusht
+mlflow_experiment_directory: /Workspace/Shared/jepa_wm
+mlflow_run_name: predictor
+compute: {accelerator_type: GPU_1xA10, num_accelerators: 1}
+environment:
+  version: databricks_ai_v6
+code_source:
+  root_path: ".."
+  include_paths: [src, train]
+command: |-
+  set -euo pipefail
+  export PYTHONPATH=$CODE_SOURCE_PATH/src
+  python $CODE_SOURCE_PATH/train/train_predictor.py --data "$OUTPUT" --output "$OUTPUT/$NAME" --probe "$OUTPUT/probe/probe.pt" $EXTRA_ARGS
+env_variables:
+  OUTPUT: /Volumes/catalog/schema/artifacts/pusht
+  NAME: predictor
+  EXTRA_ARGS: ""
+timeout_minutes: 60
+max_retries: 0

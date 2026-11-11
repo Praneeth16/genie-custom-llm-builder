@@ -28,6 +28,16 @@ The write-up is in [ARTICLE_LINKEDIN.md](ARTICLE_LINKEDIN.md).
 - `research/` holds the notes used to write the skill.
 - `SUBMISSION.md` is the How I Genie submission.
 
+## A second skill for JEPA and world models
+
+`skill/world-model-builder/` is a second skill with the same phase and gate structure. It builds JEPA-style models for video, robot, or sensor data on AI Runtime. It covers a probe on a frozen V-JEPA 2 encoder, an action-conditioned latent predictor, and a small JEPA trained from scratch with SIGReg. Its `scripts/` folder is a copy of the reference repo `jepa-world-models-databricks`, and `scripts/SOURCE_COMMIT` records the commit.
+
+1. Link it with `ln -s $PWD/skill/world-model-builder ~/.genie/skills/world-model-builder`.
+2. Run the tests with `cd skill/world-model-builder/scripts && uv run --no-project --with pytest --with torch --with numpy --with scikit-learn pytest tests -q`.
+3. In Genie Code, ask `Use $world-model-builder to build a model for <task> with data <path>`.
+
+To refresh the copy, run `rsync -a --delete --exclude .git --exclude .venv --exclude runs --exclude .env --exclude notebooks --exclude docs --exclude README.md --exclude __pycache__ --exclude .gitignore ../jepa-world-models-databricks/ skill/world-model-builder/scripts/` and update `SOURCE_COMMIT`.
+
 ## Use the skill
 
 1. Link the skill into Genie Code with `ln -s $PWD/skill/custom-llm-builder ~/.genie/skills/custom-llm-builder`.

@@ -1,0 +1,21 @@
+# Score new telemetry with the registered champion and refresh the Delta table.
+# scripts/make_bundle.sh turns this into a scheduled job.
+experiment_name: jepa_wm_serving
+mlflow_experiment_directory: /Workspace/Shared/jepa_wm
+mlflow_run_name: batch_score_sensor
+compute: {accelerator_type: GPU_1xA10, num_accelerators: 1}
+environment:
+  version: databricks_ai_v6
+code_source:
+  root_path: ".."
+  include_paths: [src, train]
+command: |-
+  set -euo pipefail
+  export PYTHONPATH=$CODE_SOURCE_PATH/src
+  python $CODE_SOURCE_PATH/train/batch_score.py --schema "$UC_SCHEMA" --volume "$(dirname "$OUTPUT")" --warehouse "$WAREHOUSE_ID"
+env_variables:
+  OUTPUT: /Volumes/catalog/schema/artifacts/batch
+  UC_SCHEMA: catalog.schema
+  WAREHOUSE_ID: "0123456789abcdef"
+timeout_minutes: 30
+max_retries: 0

@@ -1,0 +1,21 @@
+# Encode PushT frames with frozen V-JEPA 2 and cache latents in the UC Volume.
+# Probe first: --override env_variables.EXTRA_ARGS="--limit 256"
+experiment_name: jepa_wm_pusht
+mlflow_experiment_directory: /Workspace/Shared/jepa_wm
+mlflow_run_name: embed_pusht
+compute: {accelerator_type: GPU_1xA10, num_accelerators: 1}
+environment:
+  version: databricks_ai_v6
+  dependencies: ["av"]
+code_source:
+  root_path: ".."
+  include_paths: [src, train]
+command: |-
+  set -euo pipefail
+  export PYTHONPATH=$CODE_SOURCE_PATH/src
+  python $CODE_SOURCE_PATH/train/embed.py --output "$OUTPUT" $EXTRA_ARGS
+env_variables:
+  OUTPUT: /Volumes/catalog/schema/artifacts/pusht
+  EXTRA_ARGS: ""
+timeout_minutes: 60
+max_retries: 0

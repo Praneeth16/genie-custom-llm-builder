@@ -1,0 +1,25 @@
+# Position probe, then the action-conditioned predictor and planner, on cached PushT latents.
+# Needs workloads/embed.yaml to have run. Probe first:
+#   --override env_variables.PROBE_STEPS=30 --override env_variables.PREDICTOR_STEPS=30
+experiment_name: jepa_wm_pusht
+mlflow_experiment_directory: /Workspace/Shared/jepa_wm
+mlflow_run_name: world_model
+compute: {accelerator_type: GPU_1xA10, num_accelerators: 1}
+environment:
+  version: databricks_ai_v6
+  dependencies: ["av"]
+code_source:
+  root_path: ".."
+  include_paths: [src, train]
+command: |-
+  set -euo pipefail
+  export PYTHONPATH=$CODE_SOURCE_PATH/src
+  python $CODE_SOURCE_PATH/train/train_probe.py --data "$OUTPUT" --output "$OUTPUT/probe" --max-steps "$PROBE_STEPS" $EXTRA_ARGS
+  python $CODE_SOURCE_PATH/train/train_predictor.py --data "$OUTPUT" --output "$OUTPUT/predictor" --probe "$OUTPUT/probe/probe.pt" --max-steps "$PREDICTOR_STEPS" $EXTRA_ARGS
+env_variables:
+  OUTPUT: /Volumes/catalog/schema/artifacts/pusht
+  PROBE_STEPS: "3000"
+  PREDICTOR_STEPS: "5000"
+  EXTRA_ARGS: ""
+timeout_minutes: 120
+max_retries: 0

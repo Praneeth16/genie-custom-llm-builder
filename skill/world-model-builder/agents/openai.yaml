@@ -1,0 +1,4 @@
+interface:
+  display_name: "World Model Builder"
+  short_description: "Build measured JEPA and world models."
+  default_prompt: "Use $world-model-builder to build and evaluate a JEPA-style model for my video, robot, or sensor data."

@@ -1,0 +1,24 @@
+# Register the sensor JEPA and the frame encoder in Unity Catalog, then batch-score new
+# telemetry with the registered champion into a Delta table.
+experiment_name: jepa_wm_serving
+mlflow_experiment_directory: /Workspace/Shared/jepa_wm
+mlflow_run_name: register_and_score
+compute: {accelerator_type: GPU_1xA10, num_accelerators: 1}
+environment:
+  version: databricks_ai_v6
+code_source:
+  root_path: ".."
+  include_paths: [src, train]
+command: |-
+  set -euo pipefail
+  export PYTHONPATH=$CODE_SOURCE_PATH/src
+  ARTIFACTS=$(dirname "$OUTPUT")
+  python $CODE_SOURCE_PATH/train/register.py --artifacts "$ARTIFACTS" --schema "$UC_SCHEMA" $MODELS
+  python $CODE_SOURCE_PATH/train/batch_score.py --schema "$UC_SCHEMA" --volume "$ARTIFACTS" --warehouse "$WAREHOUSE_ID"
+env_variables:
+  OUTPUT: /Volumes/catalog/schema/artifacts/batch
+  UC_SCHEMA: catalog.schema
+  WAREHOUSE_ID: "0123456789abcdef"
+  MODELS: "sensor encoder"
+timeout_minutes: 60
+max_retries: 0
